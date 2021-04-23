@@ -22,7 +22,10 @@ class WBEtcd:
             return items.get('modifiedIndex')
 
         key = config.ETCD_BASE_PATH+"/services"
-        results = self.client.read(key)
+        try:
+            results = self.client.read(key)
+        except etcd.EtcdKeyNotFound:
+            return ''
         services = []
 
         for item in sorted(results._children, key=get_index):
@@ -38,8 +41,11 @@ class WBEtcd:
 
         # need to get uid
         uid = 'temp_id'
-        key = config.ETCD_BASE_PATH+"/accounts/"+uid+"/services",
-        results = self.client.read(key)
+        key = config.ETCD_BASE_PATH+"/accounts/"+uid+"/services"
+        try:
+            results = self.client.read(key)
+        except etcd.EtcdKeyNotFound:
+            return ''
         services = []
 
         for item in sorted(results._children, key=get_index):
@@ -51,6 +57,31 @@ class WBEtcd:
 
     def getAllServices(self):
         services = self.getSystemServices()
-        # services.append(self.getUserServices())
+        services.append(self.getUserServices())
 
         return services
+
+    def getServiceWithId(self, service_id):
+        key = config.ETCD_BASE_PATH+"/services/"+service_id
+        try:
+            result = self.client.read(key)
+        except etcd.EtcdKeyNotFound:
+            return ''
+
+        return json.loads(result.value)
+
+    def checkPassword(self, user_id, passwd):
+        key = config.ETCD_BASE_PATH+"/accounts/"+user_id+"/account"
+
+        try:
+            result = self.client.read(key)
+            result_value = json.loads(result.value)
+            cryptedpasswd = result_value.get('password')
+
+            # Need to do more
+            if cryptedpasswd == passwd:
+                return True
+        except etcd.EtcdKeyNotFound:
+            return False
+
+        return True

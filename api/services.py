@@ -1,21 +1,17 @@
 import logging
 
-import pkg.config as config
-from pkg.etcd import WBEtcd
+from helper import etcdClient
 
 import json
 import connexion
 
 
-# go version - GetAllServices
 def search():
-    etcdClient = WBEtcd(host=config.ETCD_HOST, port=config.ETCD_PORT)
-    etcdBasePath = config.ETCD_BASE_PATH
-
     args = connexion.request.args
-    catalog = args['catalog']
-    services = []
+    catalog = args.get('catalog')
+    logging.info("Get services with catalog - "+catalog)
 
+    services = []
     if catalog == 'system':
         services = etcdClient.getSystemServices()
     elif catalog == 'user':
@@ -24,3 +20,23 @@ def search():
         services = etcdClient.getAllServices()
 
     return services
+
+
+def get(service_id):
+    service = etcdClient.getServiceWithId(service_id)
+    return service
+
+
+def post():
+    service = connexion.request.json
+    print(service)
+
+    return "POST testing - "
+
+
+def put(service_id):
+    return "PUT testing "+service_id
+
+
+def delete(service_id):
+    return "DELETE testing "+service_id
