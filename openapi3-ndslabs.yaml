@@ -1,0 +1,936 @@
+openapi: 3.0.1
+info:
+  title: NDS Labs Workbench
+  description: API for the NDS Labs Workbench service
+  contact:
+    name: NDS Labs Support
+    url: http://www.nationaldataservice.org/projects/labs.html
+    email: ndslabs-support@nationaldataservice.org
+  version: 1.2.0
+servers:
+- url: /api
+paths:
+  /authenticate:
+    post:
+      description: |
+        Authenticate a user (login)
+      requestBody:
+        description: Auth definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Auth'
+        required: true
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Token'
+        401:
+          description: Not logged in
+          content: {}
+          $ref: '#/components/responses/UnauthorizedError'
+      x-codegen-request-body-name: auth
+    delete:
+      description: |
+        Logout a user
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Token'
+  /refresh_token:
+    get:
+      description: |
+        Refresh the JWT token
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Token'
+        401:
+          description: Not logged in
+          content: {}
+          $ref: '#/components/responses/UnauthorizedError'
+  /check_token:
+    get:
+      description: |
+        Validate the JWT token
+      parameters:
+      - name: host
+        in: query
+        description: If specified, test authorization for JWT to access \ the given
+          hostname
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content: {}
+        401:
+          description: Not logged in
+          content: {}
+          $ref: '#/components/responses/UnauthorizedError'
+  /services:
+    get:
+      description: |
+        Retrieves a site-wide list of available service definitions.
+      parameters:
+      - name: catalog
+        in: query
+        description: Filter list for catalog (user, system, all)
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Service'
+    post:
+      description: |
+        Adds a new service to the service library
+      requestBody:
+        description: Service definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Service'
+        required: true
+      responses:
+        201:
+          description: Created
+          content: {}
+      x-codegen-request-body-name: service
+  /services/{service-id}:
+    get:
+      description: |
+        Retrieves the service definition.
+      parameters:
+      - name: service-id
+        in: path
+        description: The unique service identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: The service object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Service'
+    put:
+      description: |
+        Updates a service definition in the service library
+      parameters:
+      - name: service-id
+        in: path
+        description: The unique service identifier
+        required: true
+        schema:
+          type: string
+      requestBody:
+        description: Service definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Service'
+        required: true
+      responses:
+        201:
+          description: Updated
+          content: {}
+      x-codegen-request-body-name: service
+    delete:
+      description: |
+        Delete a service
+      parameters:
+      - name: service-id
+        in: path
+        description: The unique service identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content: {}
+  /accounts:
+    get:
+      description: |
+        Retrieves a site-wide list of NDSLabs accounts.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+        404:
+          description: Not found
+          content: {}
+    post:
+      description: |
+        Adds a new accounts
+      requestBody:
+        description: Account definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Account'
+        required: true
+      responses:
+        201:
+          description: Created
+          content: {}
+      x-codegen-request-body-name: accounts
+  /accounts/{account-id}:
+    get:
+      description: |
+        Retrieves basic information about a account.
+      parameters:
+      - name: account-id
+        in: path
+        description: The unique account identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Account'
+    put:
+      description: |
+        Updates account information
+      parameters:
+      - name: account-id
+        in: path
+        description: The unique account identifier
+        required: true
+        schema:
+          type: string
+      requestBody:
+        description: Account definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Account'
+        required: true
+      responses:
+        201:
+          description: Updated
+          content: {}
+      x-codegen-request-body-name: account
+    delete:
+      description: |
+        Delete a account
+      parameters:
+      - name: account-id
+        in: path
+        description: The unique account identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content: {}
+  /stacks:
+    get:
+      description: |
+        Retrieves a list of stacks for this account.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Stack'
+        404:
+          description: Not found
+          content: {}
+    post:
+      description: |
+        Adds a new stack to this account
+      requestBody:
+        description: Stack definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Stack'
+        required: true
+      responses:
+        201:
+          description: Created
+          content: {}
+      x-codegen-request-body-name: stack
+  /stacks/{stack-id}:
+    get:
+      description: |
+        Retrieves the stack definition.
+      parameters:
+      - name: stack-id
+        in: path
+        description: The unique stack identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Stack'
+    put:
+      description: |
+        Updates stack information
+      parameters:
+      - name: stack-id
+        in: path
+        description: The unique stack identifier
+        required: true
+        schema:
+          type: string
+      requestBody:
+        description: Stack definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Stack'
+        required: true
+      responses:
+        201:
+          description: Updated
+          content: {}
+      x-codegen-request-body-name: stack
+    delete:
+      description: |
+        Delete a stack
+      parameters:
+      - name: stack-id
+        in: path
+        description: The unique stack identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content: {}
+  /stacks/{stack-id}/rename:
+    put:
+      description: |
+        Rename the stack
+      parameters:
+      - name: stack-id
+        in: path
+        description: The unique stack identifier
+        required: true
+        schema:
+          type: string
+      requestBody:
+        description: Stack name
+        content:
+          application/json:
+            schema:
+              type: string
+        required: true
+      responses:
+        201:
+          description: Updated
+          content: {}
+      x-codegen-request-body-name: name
+  /logs/{stack-service-id}:
+    get:
+      description: |
+        Retrieves the stack service log.
+      parameters:
+      - name: stack-service-id
+        in: path
+        description: The unique stack service identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Log'
+  /start:
+    get:
+      description: |
+        Adds, starts, and navigates to the specified application
+      parameters:
+      - name: key
+        in: query
+        description: The key of the service spec to start and navigate to
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content: {}
+        400:
+          description: Application key was not given
+          content: {}
+        404:
+          description: Application key was not found
+          content: {}
+  /start/{stack-id}:
+    get:
+      description: |
+        Starts the specified stack
+      parameters:
+      - name: stack-id
+        in: path
+        description: The unique stack identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content: {}
+  /stop/{stack-id}:
+    get:
+      description: |
+        Stops the specified stack
+      parameters:
+      - name: stack-id
+        in: path
+        description: The unique stack identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content: {}
+  /configs:
+    get:
+      description: |
+        Retrieves a list of service configuration options
+      parameters:
+      - name: services
+        in: query
+        description: services to filter by
+        style: form
+        explode: false
+        schema:
+          type: array
+          items:
+            type: string
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Config'
+  /version:
+    get:
+      description: |
+        Retrieve the server version
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: string
+        401:
+          description: Not logged in
+          content: {}
+          $ref: '#/components/responses/UnauthorizedError'
+      security:
+      - jwt: ['secret']
+  /register:
+    post:
+      description: |
+        Register
+      requestBody:
+        description: Account definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Account'
+        required: true
+      responses:
+        201:
+          description: Created
+          content: {}
+      x-codegen-request-body-name: account
+  /vocabulary/{vocab-name}:
+    get:
+      description: |
+        Retrieves a vocabulary
+      parameters:
+      - name: vocab-name
+        in: path
+        description: Vocabulary name
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Vocabulary'
+  /change_password:
+    put:
+      description: |
+        Change the user's password
+      requestBody:
+        description: Change password object
+        content:
+          application/json:
+            schema:
+              type: string
+              properties:
+                password:
+                  type: string
+        required: true
+      responses:
+        201:
+          description: Updated
+          content: {}
+      x-codegen-request-body-name: password
+  /register/verify:
+    put:
+      description: |
+        Verify registered email address
+      requestBody:
+        description: Verification object
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                u:
+                  type: string
+                t:
+                  type: string
+        required: true
+      responses:
+        200:
+          description: Verified
+          content: {}
+      x-codegen-request-body-name: verify
+  /reset:
+    post:
+      description: |
+        Request password reset email.
+      parameters:
+      - name: userId
+        in: query
+        description: Username or email of the account to reset
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: OK
+          content: {}
+  /support:
+    post:
+      description: |
+        Submit a support request
+      requestBody:
+        description: Support request definition
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportRequest'
+        required: true
+      responses:
+        201:
+          description: Created
+          content: {}
+      x-codegen-request-body-name: support
+  /contact:
+    get:
+      description: |
+        Get contact information
+      responses:
+        200:
+          description: OK
+          content: {}
+components:
+  schemas:
+    Auth:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    Token:
+      type: object
+      properties:
+        token:
+          type: string
+    VolumeMount:
+      type: object
+      properties:
+        mountPath:
+          type: string
+        name:
+          type: string
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        maintainer:
+          type: string
+        logo:
+          type: string
+        display:
+          type: string
+        access:
+          type: string
+        developerEnvironment:
+          type: string
+        config:
+          $ref: '#/components/schemas/Config'
+        readinessProbe:
+          $ref: '#/components/schemas/ReadyProbe'
+        image:
+          $ref: '#/components/schemas/ServiceImage'
+        resourceLimits:
+          $ref: '#/components/schemas/ResourceLimits'
+        depends:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceDependency'
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Port'
+        volumeMounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/VolumeMount'
+        repositories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Repository'
+        command:
+          type: array
+          items:
+            type: string
+        args:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        createdTime:
+          type: integer
+        updatedTime:
+          type: integer
+    ReadyProbe:
+      type: object
+      properties:
+        path:
+          type: string
+        port:
+          type: integer
+        initialDelay:
+          type: integer
+        timeout:
+          type: integer
+    Port:
+      type: object
+      properties:
+        port:
+          type: integer
+        protocol:
+          type: string
+    Repository:
+      type: object
+      properties:
+        port:
+          type: string
+        url:
+          type: string
+    ServiceDependency:
+      type: object
+      properties:
+        serviceId:
+          type: string
+        required:
+          type: boolean
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        namespace:
+          type: string
+        storageQuota:
+          type: string
+        nexturl:
+          type: string
+        resourceLimits:
+          type: object
+          properties:
+            cpuMax:
+              type: string
+            cpuDefault:
+              type: string
+            memMax:
+              type: string
+            memDefault:
+              type: string
+            storageQuota:
+              type: string
+        resourceUsage:
+          type: object
+          properties:
+            cpu:
+              type: string
+            memory:
+              type: string
+            storage:
+              type: string
+    Stack:
+      type: object
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        name:
+          type: string
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/StackService'
+        status:
+          type: string
+        action:
+          type: string
+        createTime:
+          type: integer
+        updateTime:
+          type: integer
+    StackService:
+      type: object
+      properties:
+        id:
+          type: string
+        stackId:
+          type: string
+        serviceId:
+          type: string
+        status:
+          type: string
+        imageTag:
+          type: string
+        statusMessage:
+          type: array
+          items:
+            type: string
+        endpoints:
+          type: array
+          items:
+            type: object
+            properties:
+              internalIP:
+                type: string
+              host:
+                type: string
+              ports:
+                type: object
+                properties:
+                  port:
+                    type: integer
+                  nodePort:
+                    type: integer
+                  protocol:
+                    type: string
+    Log:
+      type: object
+      properties:
+        text:
+          type: string
+    Config:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+        label:
+          type: string
+        canOverride:
+          type: boolean
+        isPassword:
+          type: boolean
+    ServiceImage:
+      type: object
+      properties:
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+    ResourceLimits:
+      type: object
+      properties:
+        cpuMax:
+          type: string
+        cpuDefault:
+          type: string
+        memMax:
+          type: string
+        memDefault:
+          type: string
+    Vocabulary:
+      type: object
+      properties:
+        name:
+          type: string
+        terms:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              definition:
+                type: string
+    SupportRequest:
+      type: object
+      properties:
+        type:
+          type: string
+        message:
+          type: string
+  parameters:
+    service-id:
+      name: service-id
+      in: path
+      description: The unique service identifier
+      required: true
+      schema:
+        type: string
+    account-id:
+      name: account-id
+      in: path
+      description: The unique account identifier
+      required: true
+      schema:
+        type: string
+    stack-id:
+      name: stack-id
+      in: path
+      description: The unique stack identifier
+      required: true
+      schema:
+        type: string
+    stack-service-id:
+      name: stack-service-id
+      in: path
+      description: The unique stack service identifier
+      required: true
+      schema:
+        type: string
+    vocab-name:
+      name: vocab-name
+      in: path
+      description: Vocabulary name
+      required: true
+      schema:
+        type: string
+  securitySchemes:
+    jwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      x-bearerInfoFunc: api.authenticate.decode_token
+  responses:
+    UnauthorizedError:
+      description: Access token is missing or invalid

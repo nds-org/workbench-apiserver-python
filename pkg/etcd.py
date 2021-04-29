@@ -2,6 +2,7 @@ import logging
 
 import etcd
 import json
+import bcrypt
 
 import pkg.config as config
 
@@ -70,18 +71,48 @@ class WBEtcd:
 
         return json.loads(result.value)
 
-    def checkPassword(self, user_id, passwd):
+    def getAccountInfo(self, account_id):
+        key = config.ETCD_BASE_PATH+"/accounts/"+account_id+"/account"
+        try:
+            result = self.client.read(key)
+        except etcd.EtcdKeyNotFound:
+            return ''
+
+        return json.loads(result.value)
+
+    def setAccountInfo(self, account_info):
+        key = config.ETCD_BASE_PATH+"/accounts/"+account_info['id']+"/account"
+
+        password = account_info['password']
+        hashed = bcrypt.hashpw(password.encode('utf8'), bcrypt.gensalt())
+        account_info['password'] = hashed.decode()
+        print(account_info)
+
+        try:
+            self.client.write(key, json.dumps(account_info))
+            return True
+        except NameError:
+            return False
+
+    def deleteAccountInfo(self, account_id):
+        key = config.ETCD_BASE_PATH+"/accounts/"+account_id+"/account"
+        try:
+            self.client.delete(key)
+            return True
+        except etcd.EtcdKeyNotFound:
+            return ''
+
+    def checkPassword(self, user_id, password):
         key = config.ETCD_BASE_PATH+"/accounts/"+user_id+"/account"
 
         try:
             result = self.client.read(key)
             result_value = json.loads(result.value)
-            cryptedpasswd = result_value.get('password')
+            hashed = result_value.get('password')
 
-            # Need to do more
-            if cryptedpasswd == passwd:
+            if bcrypt.checkpw(password.encode('utf8'), hashed.encode()):
                 return True
+            else:
+                return False
         except etcd.EtcdKeyNotFound:
             return False
-
-        return True

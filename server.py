@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     app = connexion.FlaskApp(__name__, debug=debug)
 
-    app.add_api('swagger-ndslabs.yaml',
+    app.add_api('openapi3-ndslabs.yaml',
                 arguments={'title': 'PYNDSLABS'},
                 resolver=BrapiResolver('api'),
                 resolver_error=501)

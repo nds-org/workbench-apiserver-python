@@ -8,6 +8,13 @@ info:
    url: http://www.nationaldataservice.org/projects/labs.html
   version: 1.2.0
 basePath: /api
+securityDefinitions:
+    jwt:
+      type: apiKey
+      name: Authorization
+      in: header
+      x-authentication-scheme: Bearer
+      x-bearerInfoFunc: pkg.jwt.WBJWT.decode
 schemes:
   - http
 produces:

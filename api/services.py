@@ -19,12 +19,23 @@ def search():
     else:  # catalog == all or others
         services = etcdClient.getAllServices()
 
-    return services
+    if 'x_access_token' in connexion.request.headers:
+        token = connexion.request.headers['X-Access-Token']
+        print(token)
+    print("---- start ----")
+    print(connexion.request.headers)
+    print("==== end ====")
+
+    return services, 200
 
 
 def get(service_id):
     service = etcdClient.getServiceWithId(service_id)
-    return service
+
+    if service is '':
+        return '', 204
+    else:
+        return service, 200
 
 
 def post():
