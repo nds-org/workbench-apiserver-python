@@ -8,7 +8,7 @@ class BrapiResolver(Resolver):
     Resolves endpoint functions using REST semantics (unless overridden by specifying operationId)
     """
 
-    def __init__(self, default_module_name, collection_endpoint_name='search'):
+    def __init__(self, default_module_name, collection_endpoint_name='run'):
         """
         :param default_module_name: Default module name for operations
         :type default_module_name: str

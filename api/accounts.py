@@ -7,7 +7,7 @@ from helper import etcdClient
 from pkg import validate
 
 
-def search():
+def run():
     token_user_id = connexion.context['token_info']['user']
 
     return token_user_id
@@ -25,13 +25,13 @@ def get(account_id):
 
 
 def put(account_id):
+    print(connexion.request.json)
+    account_info = connexion.request.json
     # if validate.validate_account_info(account_info):
-    #    etcdClient.setAccountInfo(account_info)
-    #    return True, 200
+    #    return etcdClient.setAccountInfo(connexion.request.json), 200
     # else:
     #    return '', 204
-    print(connexion.request.json)
-    etcdClient.setAccountInfo(connexion.request.json)
+    return etcdClient.setAccountInfo(connexion.request.json), 200
 
 
 def delete(account_id):

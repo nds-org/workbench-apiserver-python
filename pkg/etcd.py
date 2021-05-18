@@ -116,3 +116,5 @@ class WBEtcd:
                 return False
         except etcd.EtcdKeyNotFound:
             return False
+        except ValueError:
+            return False

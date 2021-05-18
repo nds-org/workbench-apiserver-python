@@ -6,17 +6,17 @@ import datetime
 import os
 
 from werkzeug.exceptions import Unauthorized
-from jose import JWTError, jwt
+from jose import JWTError, jwt, jws
 import six
 
 from helper import etcdClient
 
 JWT_SECRET = 'secret'
 JWT_ALGORITHM = 'HS256'
-JWT_EXP_DELTA_MINS = 3
+JWT_EXP_DELTA_MINS = 300
 
 
-def search():
+def run():
     logging.info("Token info - "+connexion.context['token_info'])
 
     return param
@@ -30,10 +30,9 @@ def post():
 
     if etcdClient.checkPassword(username, password):
         token = {"token": generate_token(username)}
-        return token
-
-    #token = generate_token(username)
-    # return {"token": token}
+        return token, 200
+    else:
+        return '', 401
 
 
 def delete():
@@ -62,3 +61,18 @@ def decode_token(token):
         return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except JWTError as e:
         six.raise_from(Unauthorized, e)
+
+
+def get_secret(user, token_info) -> str:
+    return '''
+    You are user_id {user} and the secret is 'wbevuec'.
+    Decoded token claims: {token_info}.
+    '''.format(user=user, token_info=token_info)
+
+
+def verify_token(token):
+    try:
+        jws.verify(token, JWT_SECRET, JWT_ALGORITHM)
+        return True, 200
+    except JWSError:
+        return JWSError, 401

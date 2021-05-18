@@ -6,7 +6,7 @@ import json
 import connexion
 
 
-def search():
+def run():
     args = connexion.request.args
     catalog = args.get('catalog')
     logging.info("Get services with catalog - "+catalog)

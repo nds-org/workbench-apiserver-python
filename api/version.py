@@ -1,6 +1,6 @@
 import connexion
 
 
-def search():
-    print(connexion.context['token_info'])
-    return "search - Hello, VERSION"
+def run():
+    print(connexion.context)
+    return "run - Hello, VERSION"
