@@ -22,7 +22,7 @@ def run():
     return param
 
 
-def post():
+def post_authenticate():
     reqJSON = connexion.request.json
     username = reqJSON['username']
     password = reqJSON['password']
@@ -35,7 +35,7 @@ def post():
         return '', 401
 
 
-def delete():
+def delete_authenticate():
     print(connexion.request.auth)
     return True
 

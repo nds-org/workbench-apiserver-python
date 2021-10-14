@@ -1,0 +1,1318 @@
+openapi: '3.0.3'
+info:
+  title: NDS Labs Workbench API
+  description: |
+    The NDS Labs Workbench allows you to launch containerized applications in the cloud. A User can authenticate using Bearer token or an OAuth2 cookie. Once authenticated, the user can access a list of Application Specs (AppSpecs), which act a blueprints to create a UserApp and allow the user to run the application. The user can use the "key" of the AppSpec to create a UserApp from it, then start the UserApp to access it.
+  contact:
+    email: ndslabs-support@nationaldataservice.org
+    name:  NDS Labs Support
+    url: http://www.nationaldataservice.org/projects/labs.html
+  version: 2.0.0
+
+servers:
+  - url: 'https://www.workbench.ndslabs.org/api'
+  - url: 'https://hub.cheesehub.org/api'
+
+
+components:
+
+  # Define authentication mechanisms here
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+    BearerAuth:
+      type: http
+      scheme: bearer
+    AuthCookie:
+      type: apiKey
+      in: cookie
+      name: token
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    OAuth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://www.workbench.ndslabs.org/oauth2/authorize
+          tokenUrl: https://www.workbench.ndslabs.org/oauth2/token
+          scopes:
+            email: Grant access to user's email address
+            profile: Grant access to user's profile info
+            openid: Grant access to user's identification info
+            read: Grants read access
+            write: Grants write access
+            admin: Grants access to admin operations
+
+  # Define shared parameters here (e.g. path parameters)
+  parameters:
+    username:
+      name: username
+      in: path
+      description: The unique account identifier
+      schema:
+        type: string
+      required: true
+    spec-id:
+      name: spec-id
+      in: path
+      description: The unique application spec identifier
+      schema:
+        type: string
+      required: true
+    user-app-id:
+      name: user-app-id
+      in: path
+      description: The unique user application identifier
+      schema:
+        type: string
+      required: true
+    app-component-id:
+      name: app-component-id
+      in: path
+      description: The unique app component identifier
+      schema:
+        type: string
+      required: true
+    vocab-name:
+      name: vocab-name
+      in: path
+      description: The unique name of a vocabulary
+      schema:
+        type: string
+      required: true
+    term-id:
+      name: term-id
+      in: path
+      description: The unique id of a term within a vocabulary
+      schema:
+        type: string
+      required: true
+
+  # Define shared types heres
+  schemas:
+    UserAccount:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        namespace:
+          type: string
+        description:
+          type: string
+          default: ""
+        nexturl:
+          type: string
+          default: ""
+        resourceLimits:
+          $ref: '#/components/schemas/ResourceLimits'
+        resourceUsage:
+          type: object
+          properties:
+            cpu:
+              type: string
+              default: "0"
+            memory:
+              type: string
+              default: "0"
+            storage:
+              type: string
+              default: "0"
+        createdTime:
+          type: integer
+        updatedTime:
+          type: integer
+      required: ["email", "namespace", "name"]
+    AppSpec:
+      type: object
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        label:
+          type: string
+          default: ""
+        description:
+          type: string
+          default: ""
+        maintainer:
+          type: string
+        logo:
+          type: string
+          default: ""
+        display:
+          type: string
+          enum: ["none","app"]
+          default: "app"
+        access:
+          type: string
+          enum: ["none","internal","external"]
+          default: "internal"
+        developerEnvironment:
+          type: string
+          default: ""
+        config:
+          $ref: '#/components/schemas/Config'
+        readinessProbe:
+          $ref: '#/components/schemas/ReadyProbe'
+        image:
+          $ref: '#/components/schemas/DockerImage'
+        resourceLimits:
+          $ref: '#/components/schemas/ResourceLimits'
+        depends:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceDependency'
+          default: []
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Port'
+          default: []
+        volumeMounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/VolumeMount'
+          default: []
+        repositories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Repository'
+          default: []
+        command:
+          type: array
+          items:
+            type: string
+          default: []
+        args:
+          type: array
+          items:
+            type: string
+          default: []
+        tags:
+          type: array
+          items:
+            type: string
+          default: []
+        createdTime:
+          type: integer
+        updatedTime:
+          type: integer
+      required: ["key","maintainer"]
+
+    # Spec / StackService fields
+    Config:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+          default: ""
+        label:
+          type: string
+          default: ""
+        canOverride:
+          type: boolean
+          default: true
+        isPassword:
+          type: boolean
+          default: false
+      required: ["name"]
+    DockerImage:
+      type: object
+      properties:
+        repo:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+          default: []
+      required: ["repo"]
+    ServiceDependency:
+      type: object
+      properties:
+        serviceId:
+          type: string
+        required:
+          type: boolean
+          default: false
+      required: ["serviceId"]
+    Port:
+      type: object
+      properties:
+        protocol:
+          type: string
+          enum: ["tcp", "http"]
+        number:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        path:
+          type: string
+          default: ""  # HTTP only
+        nodePort:
+          type: integer
+          minimum: 32768
+          maximum: 65535  # Read-only?
+      required: ["protocol", "number"]
+    VolumeMount:
+      type: object
+      properties:
+        name:
+          type: string
+        mountPath:
+          type: string
+      required: ["name", "mountPath"]
+
+    # Advanced Stuff
+    ReadyProbe:
+      type: object
+      properties:
+        port:
+          $ref: '#/components/schemas/Port'
+        initialDelay:
+          type: integer
+          default: 30
+          minimum: 0
+          maximum: 86400
+        timeout:
+          type: integer
+          default: 300
+          minimum: 0
+          maximum: 86400
+      required: ["port"]
+    ResourceLimits:
+      type: object
+      properties:
+        cpuMax:
+          type: string
+          default: "1"
+        cpuDefault:
+          type: string
+          default: "0.5"
+        memMax:
+          type: string
+          default: "1024M"
+        memDefault:
+          type: string
+          default: "512M"
+    Repository:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: ["github", "docker"]
+        url:
+          type: string
+      required: ["type", "url"]
+
+    # Users can add applications based on specs from the catalog
+    UserApp:
+      type: object
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        name:
+          type: string
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserAppComponent'
+          default: []
+        status:
+          type: string
+        #action:
+        #  type: string
+        createdTime:
+          type: integer
+        updatedTime:
+          type: integer
+      required: ["key", "components"]
+    UserAppComponent:
+      type: object
+      properties:
+        specKey:
+          type: string
+        id:
+          type: string
+        app:
+          type: string
+        image:
+          $ref: '#/components/schemas/DockerImage'
+        status:
+          type: string
+        statusMessage:
+          type: array
+          items:
+            type: string
+        endpoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserEndpoint'
+          default: []
+      required: ["specKey"]
+    UserEndpoint:
+      type: object
+      properties:
+        internalIP:
+          type: string
+        host:
+          type: string
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Port'
+    UserAppComponentLogs:
+      type: object
+      properties:
+        text:
+          type: string
+    Vocabulary:
+      type: object
+      properties:
+        name:
+          type: string
+        terms:
+          type: array
+          items:
+            $ref: '#/components/schemas/VocabTerm'
+          default: []
+      required: ["name"]
+    VocabTerm:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        label:
+          type: string
+        definition:
+          type: string
+      required: ["definition"]
+
+  # App-level security definitions
+  # security:
+  #  - ApiKeyAuth: []
+  #  - OAuth2:
+  #      - read
+  #      - write
+
+tags:
+  - name: system
+    description: System-level details and metrics
+  - name: app spec
+    description: Application Spec Catalog
+  - name: user
+    description: Manage User Accounts
+  - name: user app
+    description: Instanced User Applications
+  - name: vocabulary
+    description: Vocabulary for categorizing specs, apps, and components
+
+paths:
+
+  /version:
+    get:
+      tags:
+        - system
+      operationId: "getVersion"
+      summary: Get the current server version info
+      description: |
+        Retrieve information about the server's current version
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  server:
+                    type: string
+
+  /vocabularies:
+    get:
+      operationId: 'listVocabularies'
+      tags:
+        - vocabulary
+      summary: Retrieve a list of all vocabularies
+      description: |
+        Retrieve a list of all vocabularies
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Vocabulary'
+
+  /vocabularies/{vocab-name}:
+    parameters:
+      - $ref: '#/components/parameters/vocab-name'
+    get:
+      operationId: 'getVocabularyByName'
+      tags:
+        - vocabulary
+      summary: Retrieve a single vocabulary and all of its terms
+      description: |
+        Retrieve a single vocabulary and all of its terms
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vocabulary'
+        '404':
+          description: Not found
+    put:
+      operationId: 'updateVocabulary'
+      tags:
+        - vocabulary
+      summary: Create a new vocabulary or replace the list of terms in an existing vocabulary
+      description: |
+        Create a new vocabulary or replace the list of terms in an existing vocabulary (upsert)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vocabulary'
+        '304':
+          description: Not modified
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/VocabTerm'
+    delete:
+      operationId: 'deleteVocabulary'
+      tags:
+        - vocabulary
+      summary: Delete an entire vocabulary
+      description: |
+        Delete an entire vocabulary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vocabulary'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+
+  /vocabularies/{vocab-name}/terms:
+    parameters:
+      - $ref: '#/components/parameters/vocab-name'
+    get:
+      operationId: 'getVocabularyTermsByName'
+      tags:
+        - vocabulary
+      summary: Retrieve a single vocabulary and all of its terms
+      description: |
+        Retrieve a single vocabulary and all of its terms
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VocabTerm'
+        '404':
+          description: Not found
+    post:
+      operationId: 'createVocabularyTerm'
+      tags:
+        - vocabulary
+      summary: Add a new term to a vocabulary
+      description: |
+        Add a new term to a vocabulary
+      responses:
+        '200':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vocabulary:
+                    $ref: '#/components/schemas/Vocabulary'
+                  term:
+                    $ref: '#/components/schemas/VocabTerm'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VocabTerm'
+
+
+  /vocabularies/{vocab-name}/terms/{term-id}:
+    parameters:
+      - $ref: '#/components/parameters/vocab-name'
+      - $ref: '#/components/parameters/term-id'
+    get:
+      operationId: 'getVocabularyTermById'
+      tags:
+        - vocabulary
+      summary: Retrieve a single vocabulary term
+      description: |
+        Retrieve a single vocabulary term
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabTerm'
+        '404':
+          description: Not found
+    put:
+      operationId: 'updateVocabularyTerm'
+      tags:
+        - vocabulary
+      summary: Update a term within a vocabulary
+      description: |
+        Update a term within a vocabulary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vocabulary:
+                    $ref: '#/components/schemas/Vocabulary'
+                  term:
+                    $ref: '#/components/schemas/VocabTerm'
+        '304':
+          description: Not modified
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VocabTerm'
+    delete:
+      operationId: 'deleteVocabularyTerm'
+      tags:
+        - vocabulary
+      summary: Delete a term from a vocabulary
+      description: |
+        Delete a term from a vocabulary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vocabulary:
+                    $ref: '#/components/schemas/Vocabulary'
+                  term:
+                    $ref: '#/components/schemas/VocabTerm'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+
+
+  /users:
+    get:
+      operationId: 'listUserAccounts'
+      tags:
+        - user
+      summary: Retrieve a list of user accounts
+      description: |
+        Retrieve a list of existing user accounts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserAccount'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+    post:
+      operationId: 'createUserAccount'
+      tags:
+        - user
+      summary: Add a new user account (admin only)
+      description: |
+        Add a new user account (admin only)
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAccount'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAccount'
+
+
+  '/users/{username}':
+    parameters:
+      - $ref: '#/components/parameters/username'
+    get:
+      operationId: 'getUserAccountByUsername'
+      tags:
+        - user
+      summary: Retrieve a user account
+      description: |
+        Retrieve basic information about a account
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAccount'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    put:
+      operationId: 'updateUserAccount'
+      tags:
+        - user
+      summary: Update user account information
+      description: |
+        Update user account information
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAccount'
+        '304':
+          description: Not modified
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Conflict
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAccount'
+    delete:
+      operationId: 'deleteUserAccount'
+      tags:
+        - user
+      summary: Delete a user account
+      description: |
+        Delete an account
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAccount'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  /specs:
+    get:
+      operationId: 'listAppSpecs'
+      tags:
+        - app spec
+      summary: Retrieve a list of system-level Application Specs
+      description: |
+        Retrieve a list of Application Specs from the catalog that are offered to all users by the system
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppSpec'
+    post:
+      operationId: 'createAppSpec'
+      tags:
+        - app spec
+      summary: Add a new system-level Application Spec
+      description: |
+        Add a new system-level Application Spec
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSpec'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppSpec'
+
+  /specs/{spec-id}:
+    parameters:
+      - $ref: '#/components/parameters/spec-id'
+    get:
+      operationId: 'updateAppSpec'
+      tags:
+        - app spec
+      summary: Retrieve a single system-level Application Spec
+      description: |
+        Retrieve a list of Application Specs from the catalog that are offered to all users by the system
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSpec'
+        '404':
+          description: Not found
+    put:
+      tags:
+        - app spec
+      summary: Update a user-level Application Spec
+      description: |
+        Update a user-level Application Spec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSpec'
+        '304':
+          description: Not modified
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Conflict
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppSpec'
+    delete:
+      tags:
+        - app spec
+      summary: Delete a user-level Application Spec
+      description: |
+        Delete a user-level Application Spec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSpec'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  /users/{username}/specs:
+    parameters:
+      - $ref: '#/components/parameters/username'
+    get:
+      tags:
+        - app spec
+      summary: Retrieve a list of user-level Application Specs
+      description: |
+        Retrieve a list of Application Specs from the catalog that a user has added
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppSpec'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    post:
+      tags:
+        - app spec
+      summary: Add a new user-level Application Spec
+      description: |
+        Add a new user-level Application Spec
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSpec'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppSpec'
+
+
+  /users/{username}/specs/{spec-id}:
+    parameters:
+      - $ref: '#/components/parameters/username'
+      - $ref: '#/components/parameters/spec-id'
+    get:
+      tags:
+        - app spec
+      summary: Retrieve a single user-level Application Spec
+      description: |
+        Retrieve a single Application Spec created by a user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSpec'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    put:
+      tags:
+        - app spec
+      summary: Update a user-level Application Spec
+      description: |
+        Update a user-level Application Spec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSpec'
+        '304':
+          description: Not modified
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Conflict
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppSpec'
+    delete:
+      tags:
+        - app spec
+      summary: Delete a user-level Application Spec
+      description: |
+        Delete a user-level Application Spec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSpec'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+
+  /users/{username}/apps:
+    parameters:
+      - $ref: '#/components/parameters/username'
+    get:
+      tags:
+        - user app
+      summary: Retrieve a list of User Application instances
+      description: |
+        Retrieve a list of Applications created by a user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserApp'
+    post:
+      tags:
+        - user app
+      summary: Create a new User Application instance
+      description: |
+        Create a new User Application instance
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApp'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserApp'
+
+
+
+  /users/{username}/apps/{user-app-id}:
+    parameters:
+      - $ref: '#/components/parameters/username'
+      - $ref: '#/components/parameters/user-app-id'
+    get:
+      tags:
+        - user app
+      summary: Retrieve a single User Application instance created by a user
+      description: |
+        Retrieve a single User Application created by a user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApp'
+    put:
+      tags:
+        - user app
+      summary: Update a User Application
+      description: |
+        Update a User Application
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApp'
+        '304':
+          description: Not modified
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Conflict
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserApp'
+    delete:
+      tags:
+        - user app
+      summary: Delete a (stopped) User Application instance
+      description: |
+        Delete a User Application instance (must be stopped)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApp'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+
+  /users/{username}/apps/{user-app-id}/components:
+    parameters:
+      - $ref: '#/components/parameters/username'
+      - $ref: '#/components/parameters/user-app-id'
+    get:
+      tags:
+        - user app
+      summary: Retrieve a list of components in a User Application
+      description: |
+        Retrieve a list of components that make up a User Application
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserAppComponent'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    post:
+      tags:
+        - user app
+      summary: Add a component to a User Application
+      description: |
+        Add a component to a User Application
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApp'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Conflict
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAppComponent'
+
+
+
+  /users/{username}/apps/{user-app-id}/components/{app-component-id}:
+    parameters:
+      - $ref: '#/components/parameters/username'
+      - $ref: '#/components/parameters/user-app-id'
+      - $ref: '#/components/parameters/app-component-id'
+    get:
+      tags:
+        - user app
+      summary: Retrieve a single component of a User Application
+      description: |
+        Retrieve a single component of a User Application
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAppComponent'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    put:
+      tags:
+        - user app
+      summary: Update a component of a User Application
+      description: |
+        Update a User Application
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApp'
+        '304':
+          description: Not modified
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Conflict
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAppComponent'
+    delete:
+      tags:
+        - user app
+      summary: Remove a component from a User Application
+      description: |
+        Remove a component from a User Application
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApp'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+
+  /users/{username}/apps/{user-app-id}/start:
+    parameters:
+      - $ref: '#/components/parameters/username'
+      - $ref: '#/components/parameters/user-app-id'
+      - $ref: '#/components/parameters/app-component-id'
+    get:
+      tags:
+        - user app
+      summary: Launch a User Application
+      description: |
+        Launch a User Application
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApp'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  /users/{username}/apps/{user-app-id}/stop:
+    parameters:
+      - $ref: '#/components/parameters/username'
+      - $ref: '#/components/parameters/user-app-id'
+      - $ref: '#/components/parameters/app-component-id'
+    get:
+      tags:
+        - user app
+      summary: Shutdown a User Application
+      description: |
+        Shutdown a User Application
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserApp'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+
+
+  /users/{username}/apps/{user-app-id}/components/{app-component-id}/logs:
+    parameters:
+      - $ref: '#/components/parameters/username'
+      - $ref: '#/components/parameters/user-app-id'
+      - $ref: '#/components/parameters/app-component-id'
+    get:
+      tags:
+        - user app
+      summary: Retrieve logs from a (running) component of a User Application
+      description: |
+        Retrieve logs of a component of a User Application (must be running)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAppComponentLogs'
+        '401':
+          description: Not authorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found

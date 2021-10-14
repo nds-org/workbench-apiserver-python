@@ -4,7 +4,7 @@ import jwt
 import datetime
 import os
 
-import pkg.config as config
+from pkg import config
 
 
 class WBJWT:

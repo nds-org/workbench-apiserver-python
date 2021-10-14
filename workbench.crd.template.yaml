@@ -1,0 +1,37 @@
+{{crd_gen_comment}}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  # name must match the spec fields below, and be in the form: <plural>.<group>
+  name: {{crd_plural}}.{{crd_groupname}}
+spec:
+  # group name to use for REST API: /apis/<group>/<version>
+  group: {{crd_groupname}}
+  # list of versions supported by this CustomResourceDefinition
+  versions:
+    - name: {{crd_version}}
+      # Each version can be enabled/disabled by Served flag.
+      served: true
+      # One and only one version must be marked as the storage version.
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+{{crd_spec_schema|indent(14, true)}}
+
+
+  # either Namespaced or Cluster
+  scope: {{crd_scope}}
+  names:
+    # plural name to be used in the URL: /apis/<group>/<version>/<plural>
+    plural: {{crd_plural}}
+    # singular name to be used as an alias on the CLI and for display
+    singular: {{crd_singular}}
+    # kind is normally the CamelCased singular type. Your resource manifests use this.
+    kind: {{crd_kind}}
+    # shortNames allow shorter string to match your resource on the CLI
+    shortNames:
+{{crd_shortnames|indent(6, true)}}
