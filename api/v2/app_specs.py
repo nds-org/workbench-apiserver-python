@@ -165,7 +165,7 @@ def run():
 def get(service_id):
     service = etcdClient.getServiceWithId(service_id)
 
-    if service is '':
+    if service == '':
         return '', 204
     else:
         return service, 200

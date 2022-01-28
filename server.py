@@ -1,31 +1,18 @@
 import logging
+import os
 
 import connexion
 from pkg import config, kube
 
-#from pkg.mongo import db
-
 logger = logging.getLogger("server")
-
-
 
 
 from pkg.resolver import OperationResolver, DebugRestyResolver
 
 if __name__ == '__main__':
-    debug = True
+    debug = os.getenv('DEBUG', False)
 
-    if config.KUBE_WORKBENCH_NAMESPACE is not None and config.KUBE_WORKBENCH_NAMESPACE != '':
-        logger.debug("Starting in single-namespace mode: " + config.KUBE_WORKBENCH_NAMESPACE)
-        try:
-            kube.create_namespace(config.KUBE_WORKBENCH_NAMESPACE)
-        except Exception as err:
-            logger.warning("Failed to create base namespace %s: %s" % (config.KUBE_WORKBENCH_NAMESPACE, err))
-
-        if config.KUBE_WORKBENCH_RESOURCE_PREFIX:
-            logger.debug("Using resource prefix: " + config.KUBE_WORKBENCH_RESOURCE_PREFIX)
-    else:
-        logger.debug("Starting in multi-namespace mode")
+    # kube.initialize()
 
     if debug:
         logging.basicConfig(
@@ -37,17 +24,16 @@ if __name__ == '__main__':
     app = connexion.FlaskApp(__name__, debug=debug)
 
     if str.startswith(config.SWAGGER_URL, "http"):
-        # fetch remote swagger
+        # fetch remote openapi spec
         app.add_api(config.download_remote_swagger_to_temp_file(),
-                    #resolver=DebugRestyResolver('api.v2'),
+                    # resolver=DebugRestyResolver('api.v2'),
                     resolver=OperationResolver('api'),
-                    arguments={'title': 'PYNDSLABS.V2'}, resolver_error=501)
+                    arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501)
     else:
-        # use local swagger
+        # use local openapi spec
         app.add_api(config.SWAGGER_URL,
-                    resolver=DebugRestyResolver('api.v2'),
-                    #resolver=OperationResolver('api'),
-                    arguments={'title': 'PYNDSLABS.V2'}, resolver_error=501)
-
+                    # resolver=DebugRestyResolver('api.v2'),
+                    resolver=OperationResolver('api'),
+                    arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501)
 
     app.run(port=5000, host='0.0.0.0', server='flask', debug=debug)

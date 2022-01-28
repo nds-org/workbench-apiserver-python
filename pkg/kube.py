@@ -2,6 +2,8 @@ import logging
 import time
 from kubernetes import client, config as kubeconfig, watch
 
+from pkg import config
+
 
 CRD_GROUP_NAME = "ndslabs.org"
 CRD_VERSION_V1 = "v1"
@@ -16,21 +18,36 @@ logger = logging.getLogger('kube')
 kubeconfig.load_kube_config()
 custom = client.CustomObjectsApi()
 
-watched_namespaces = ["test"]
-for namespace in watched_namespaces:
-    count = 10
-    w = watch.Watch()
-    for event in w.stream(custom.list_namespaced_custom_object,
-                          group=CRD_GROUP_NAME,
-                          version=CRD_VERSION_V1,
-                          namespace=namespace,
-                          plural=CRD_USERAPPS_PLURAL,
-                          _request_timeout=60):
-        print("Event: %s %s" % (event['type'], event['object']['metadata']['name']))
-        count -= 1
-        time.sleep(10)
-        if not count:
-            w.stop()
+# TODO: V2 - watch custom resources and react accordingly
+#watched_namespaces = ["test"]
+#for namespace in watched_namespaces:
+#    count = 10
+#    w = watch.Watch()
+#    for event in w.stream(custom.list_namespaced_custom_object,
+#                          group=CRD_GROUP_NAME,
+#                          version=CRD_VERSION_V1,
+#                          namespace=namespace,
+#                          plural=CRD_USERAPPS_PLURAL,
+#                          _request_timeout=60):
+#        print("Event: %s %s" % (event['type'], event['object']['metadata']['name']))
+#        count -= 1
+#        time.sleep(10)
+#        if not count:
+#            w.stop()
+
+
+def initialize():
+    if config.KUBE_WORKBENCH_NAMESPACE is not None and config.KUBE_WORKBENCH_NAMESPACE != '':
+        logger.debug("Starting in single-namespace mode: " + config.KUBE_WORKBENCH_NAMESPACE)
+        try:
+            create_namespace(config.KUBE_WORKBENCH_NAMESPACE)
+        except Exception as err:
+            logger.warning("Failed to create base namespace %s: %s" % (config.KUBE_WORKBENCH_NAMESPACE, err))
+
+        if config.KUBE_WORKBENCH_RESOURCE_PREFIX:
+            logger.debug("Using resource prefix: " + config.KUBE_WORKBENCH_RESOURCE_PREFIX)
+    else:
+        logger.debug("Starting in multi-namespace mode")
 
 
 def create_namespace(namespace_name, **kwargs):
