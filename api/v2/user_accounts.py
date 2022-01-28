@@ -18,8 +18,8 @@ from pkg.mongo import get_mongo_client, parse_json
 
 from pkg import config, kube, keycloak
 
-from helper import etcdClient
-from pkg import validate
+#from helper import etcdClient
+#from pkg import validate
 
 logger = logging.getLogger('user_accounts')
 
