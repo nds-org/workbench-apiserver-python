@@ -40,20 +40,12 @@ JWT_TIMEOUT = datetime.timedelta(minutes=JWT_EXP_DELTA_MINS)
 # v2
 MONGO_USER = 'admin'
 MONGO_PASS = 'mysupersecretamazingawesomepasswordthatnobodycouldeverguess'
-MONGO_HOST = 'host.docker.internal'
-MONGO_PORT = '27017'
-MONGO_DATABASE = 'workbench'
 MONGO_URI = 'mongodb://%s:%s@%s:%s/%s' % (MONGO_USER, MONGO_PASS, MONGO_HOST, MONGO_PORT, MONGO_DATABASE)
 
 
 KUBE_WORKBENCH_RESOURCE_PREFIX = ''
 KUBE_WORKBENCH_NAMESPACE = ''
 KUBE_SINGLEPOD = False   # TODO: Should we continue want to support this?
-KUBE_HOST = 'localhost'
-KUBE_PORT = '6443'
-KUBE_TOKENPATH = '/run/secrets/kubernetes.io/serviceaccount/token'
-KUBE_QPS = 50
-KUBE_BURST = 100
 KUBE_PVC_STORAGECLASS = 'hostpath'
 
 # Use central Keycloak
@@ -65,11 +57,7 @@ KC_ENDPOINT = '%s/auth/realms/%s/.well-known/openid-configuration' % (KC_HOST, K
 # TODO: fetch token
 # curl https://keycloak.workbench.ndslabs.org/auth/realms/workbench-dev/protocol/openid-connect/token -XPOST --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'client_id=workbench-local' --data-urlencode 'grant_type=password' --data-urlencode 'username=test' --data-urlencode 'password=mysamplepasswordissupersecure' --data-urlencode 'scope=openid' --data-urlencode 'client_secret=73305daa-c3d9-4ec7-aec0-caa9b030e182'
 
-JWT_SECRET = os.getenv('JWT_SECRET', 'secret')
-JWT_ALGORITHM = 'RS256'
-JWT_EXP_DELTA_MINS = 300
-
-SWAGGER_URL = os.getenv('SWAGGER_URL', 'swagger.yml')
+SWAGGER_URL = os.getenv('SWAGGER_URL', 'openapi/swagger-ndslabs.yaml')
 
 
 def get_resource_name(*args):
@@ -88,7 +76,7 @@ def get_resource_namespace(username):
 
 # Downloads a remote swagger spec from the configured SWAGGER_URL and save it to a temp file.
 # Returns the path to the temp file created.
-def download_remote_swagger_to_temp_file(temp_file_name='swagger.yml'):
+def download_remote_swagger_to_temp_file(temp_file_name='swagger-keycloak.yml'):
     try:
         # fetch swagger spec, parse response
         swagger_response = requests.get(SWAGGER_URL)

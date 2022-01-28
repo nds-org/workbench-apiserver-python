@@ -19,7 +19,7 @@ def create_service(service):
             return data_store.create_user_appspec(service), 201
 
 
-def list_services(catalog):
+def list_services(catalog='all'):
     args = connexion.request.args
     catalog = args.get('catalog') # ????
 
