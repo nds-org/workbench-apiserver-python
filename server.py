@@ -44,12 +44,12 @@ if __name__ == '__main__':
     if str.startswith(config.SWAGGER_URL, "http"):
         # fetch remote swagger
         app.add_api(config.download_remote_swagger_to_temp_file(),
-                    resolver=DebugRestyResolver('api.v1'),
-                    arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501)
+                    resolver=DebugRestyResolver('api.v2'),
+                    arguments={'title': 'PYNDSLABS.V2'}, resolver_error=501)
     else:
         # use local swagger
         app.add_api(config.SWAGGER_URL,
-                    resolver=DebugRestyResolver('api.v1'),
-                    arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501)
+                    resolver=DebugRestyResolver('api.v2'),
+                    arguments={'title': 'PYNDSLABS.V2'}, resolver_error=501)
 
     app.run(port=5000, host='0.0.0.0', server='flask', debug=debug)

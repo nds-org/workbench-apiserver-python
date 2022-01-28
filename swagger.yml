@@ -64,7 +64,7 @@ paths:
       tags:
         - system
       operationId: 'get_version'
-      x-swagger-router-controller: 'api.v1.system'
+      x-swagger-router-controller: 'api.v2.system'
       description: |
         Retrieve the server version
       responses:
@@ -77,7 +77,7 @@ paths:
       tags:
         - user account
       operationId: 'post_authenticate'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Authenticate a user (login)
       parameters:
@@ -100,7 +100,7 @@ paths:
       tags:
         - user account
       operationId: 'delete_authenticate'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Logout a user
       responses:
@@ -113,7 +113,7 @@ paths:
       tags:
         - user account
       operationId: 'refresh_token'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Refresh the JWT token
       responses:
@@ -130,7 +130,7 @@ paths:
       tags:
         - user account
       operationId: 'check_token'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Validate the JWT token
       parameters:
@@ -150,7 +150,7 @@ paths:
       tags:
         - app spec
       operationId: 'list_services'
-      x-swagger-router-controller: 'api.v1.app_specs'
+      x-swagger-router-controller: 'api.v2.app_specs'
       description: |
         Retrieves a site-wide list of available service definitions.
       parameters:
@@ -172,7 +172,7 @@ paths:
       tags:
         - app spec
       operationId: 'create_service'
-      x-swagger-router-controller: 'api.v1.app_specs'
+      x-swagger-router-controller: 'api.v2.app_specs'
       description: |
         Adds a new service to the service library
       parameters:
@@ -194,7 +194,7 @@ paths:
       tags:
         - app spec
       operationId: 'get_service_by_id'
-      x-swagger-router-controller: 'api.v1.app_specs'
+      x-swagger-router-controller: 'api.v2.app_specs'
       description: |
         Retrieves the service definition.
       responses:
@@ -208,7 +208,7 @@ paths:
       tags:
         - app spec
       operationId: 'update_service'
-      x-swagger-router-controller: 'api.v1.app_specs'
+      x-swagger-router-controller: 'api.v2.app_specs'
       description: |
         Updates a service definition in the service library
       parameters:
@@ -227,7 +227,7 @@ paths:
       tags:
         - app spec
       operationId: 'delete_service'
-      x-swagger-router-controller: 'api.v1.app_specs'
+      x-swagger-router-controller: 'api.v2.app_specs'
       description: |
         Delete a service
       responses:
@@ -240,7 +240,7 @@ paths:
       tags:
         - user account
       operationId: 'list_accounts'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Retrieves a site-wide list of NDSLabs accounts.
       responses:
@@ -258,7 +258,7 @@ paths:
       tags:
         - user account
       operationId: 'create_account'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Adds a new accounts
       parameters:
@@ -280,7 +280,7 @@ paths:
       tags:
         - user account
       operationId: 'get_account_by_id'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Retrieves basic information about a account.
       responses:
@@ -294,7 +294,7 @@ paths:
       tags:
         - user account
       operationId: 'update_account'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Updates account information
       parameters:
@@ -313,7 +313,7 @@ paths:
       tags:
         - user account
       operationId: 'delete_account'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Delete a account
       responses:
@@ -326,7 +326,7 @@ paths:
       tags:
         - user app
       operationId: 'list_stacks'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       description: |
         Retrieves a list of stacks for this account.
       responses:
@@ -344,7 +344,7 @@ paths:
       tags:
         - user app
       operationId: 'create_stack'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       description: |
         Adds a new stack to this account
       parameters:
@@ -366,7 +366,7 @@ paths:
       tags:
         - user app
       operationId: 'get_stack_by_id'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       description: |
         Retrieves the stack definition.
       responses:
@@ -380,7 +380,7 @@ paths:
       tags:
         - user app
       operationId: 'update_stack'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       description: |
         Updates stack information
       parameters:
@@ -399,7 +399,7 @@ paths:
       tags:
         - user app
       operationId: 'delete_stack'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       description: |
         Delete a stack
       responses:
@@ -414,7 +414,7 @@ paths:
       tags:
         - user app
       operationId: 'rename_stack'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       parameters:
         - name: name
           description: Stack name
@@ -436,7 +436,7 @@ paths:
       tags:
         - user app
       operationId: 'get_stack_service_logs'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       description: |
         Retrieves the stack service log.
       responses:
@@ -457,7 +457,7 @@ paths:
       tags:
         - user app
       operationId: 'quickstart_stack'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       description: |
         Adds, starts, and navigates to the specified application
       responses:
@@ -476,7 +476,7 @@ paths:
       tags:
         - user app
       operationId: 'start_stack'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       description: |
         Starts the specified stack
       responses:
@@ -491,7 +491,7 @@ paths:
       tags:
         - user app
       operationId: 'stop_stack'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       description: |
         Stops the specified stack
       responses:
@@ -504,7 +504,7 @@ paths:
       tags:
         - user app
       operationId: 'get_stack_configs'
-      x-swagger-router-controller: 'api.v1.user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       parameters:
         - name: services
           in: query
@@ -528,7 +528,7 @@ paths:
       tags:
         - user account
       operationId: 'validate_o_auth_token'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Check if the user has an active/valid OAuth session
       responses:
@@ -543,7 +543,7 @@ paths:
       tags:
         - user account
       operationId: 'register_user'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Register
       parameters:
@@ -561,7 +561,7 @@ paths:
       tags:
         - vocabulary
       operationId: 'get_vocabulary_by_name'
-      x-swagger-router-controller: 'api.v1.vocabulary'
+      x-swagger-router-controller: 'api.v2.vocabulary'
       parameters:
         - $ref: '#/parameters/vocab-name'
       description: |
@@ -579,7 +579,7 @@ paths:
       tags:
         - user account
       operationId: 'change_password'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       parameters:
         - name: password
           description: Change password object
@@ -600,7 +600,7 @@ paths:
       tags:
         - user account
       operationId: 'verify_email_address'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       parameters:
         - name: verify
           description: Verification object
@@ -631,7 +631,7 @@ paths:
       tags:
         - user account
       operationId: 'send_reset_password_email'
-      x-swagger-router-controller: 'api.v1.user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       description: |
         Request password reset email.
       responses:
