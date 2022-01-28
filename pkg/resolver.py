@@ -1,6 +1,9 @@
 import re
 
+import connexion
 from connexion import Resolver
+
+import logging
 
 
 class OperationResolver(Resolver):
@@ -60,3 +63,13 @@ class OperationResolver(Resolver):
             return name + '.' + method
         else:
             return name + '_' + method
+
+
+class DebugRestyResolver(connexion.RestyResolver):
+    def __init__(self):
+        self.logger = logging.getLogger('DebugRestyResolver')
+
+    def resolve_operation_id(self, operation):
+        result = super().resolve_operation_id(operation)
+        self.logger.debug(f"{operation} == {result}")
+        return result

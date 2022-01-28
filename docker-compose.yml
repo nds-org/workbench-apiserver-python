@@ -1,0 +1,53 @@
+
+version: "3.9"
+
+services:
+  #mongo-pydev:
+  #  container_name: "ndslabs-mongo"
+  #  image: "mongo:5.0.3"
+  #  env_file:
+  #    - mongo.env
+  #  #networks:
+  #  #  - workbench
+  #  volumes:
+  #    - "~/dev-data/mongo-py:/data/db"
+  #  ports:
+  #    - "27017:27017"
+  #  restart: always
+
+  #etcd-pydev:
+  #  container_name: "ndslabs-etcd-pydev"
+  #  image: "quay.io/coreos/etcd:v3.3"
+  #  #networks:
+  #  #  - workbench
+  #  ports:
+  #    - "4001:4001"
+  #  volumes:
+  #    - "~/dev-data/etcd-py:/var/etcd/data"
+  #  restart: always
+  #  command: "/usr/local/bin/etcd --listen-client-urls=http://0.0.0.0:4001 --advertise-client-urls=http://127.0.0.1:4001 --data-dir=/var/etcd/data"
+
+  apiserver-pydev:
+    container_name: "ndslabs-apiserver-pydev"
+    image: "ndslabs/apiserver:python"
+  #  depends_on:
+  #    - mongo-pydev
+  #    - etcd-pydev
+    #networks:
+    #  - workbench
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - "~/go/src/github.com/workbench-apiserver-golang/token:/var/run/secrets/kubernetes.io/serviceaccount/token"
+      - "~/go/src/github.com/workbench-apiserver-golang/ca.crt:/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+      - "~/.kube/config.DOCKERMACOSX:/root/.kube/config"
+      - "~/workspace/national-data-service/workbench-apiserver-python:/app"
+    ports:
+      - "5000:5000"
+    env_file:
+      - apiserver.env
+    restart: always
+
+#networks:
+#  workbench:

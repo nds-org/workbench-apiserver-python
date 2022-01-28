@@ -8,7 +8,7 @@ import os
 
 from jose import JWTError, jwt
 
-import pkg.config as config
+from pkg import config
 
 logger = logging.getLogger('pkg.jwt')
 
