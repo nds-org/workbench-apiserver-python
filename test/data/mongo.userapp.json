@@ -1,0 +1,42 @@
+{
+      "id": "s206zs",
+      "key": "mongo",
+      "name": "MongoDB",
+      "services": [
+         {
+            "id": "s206zs-mongo",
+            "stack": "mongo",
+            "service": "mongo",
+            "imageTag": "",
+            "status": "stopped",
+            "statusMessages": [],
+            "endpoints": [
+               {
+                  "host": "s206zs-mongo.local.ndslabs.org",
+                  "port": 27017,
+                  "nodePort": 0,
+                  "protocol": "tcp",
+                  "url": "s206zs-mongo.local.ndslabs.org/"
+               }
+            ],
+            "createdTime": 0,
+            "updateTime": 0,
+            "config": {},
+            "ports": {
+              "mongodb": 27017
+            },
+            "volumeMounts": {},
+            "internalIP": "10.111.75.130",
+            "resourceLimits": {
+               "cpuMax": "400m",
+               "cpuDefault": "200m",
+               "memMax": "512Mi",
+               "memDefault": "1Gi"
+            }
+         }
+      ],
+      "status": "started",
+      "createdTime": 0,
+      "updateTime": 0,
+      "secure": false
+}

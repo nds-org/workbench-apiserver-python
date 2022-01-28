@@ -132,6 +132,5 @@ dmypy.json
 .idea/
 
 # Random test files / specs
-*.json
 *.tmp
 cookies

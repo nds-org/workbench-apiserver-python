@@ -1,0 +1,50 @@
+{
+   "apiVersion": "ndslabs.org/v1",
+   "kind": "WorkbenchUserApp",
+   "metadata": {
+      "name": "toolmanager-s925hj",
+      "namespace": "test"
+   },
+   "spec": {
+      "id": "s925hj",
+      "key": "toolmanager",
+      "name": "Analysis Toolbox",
+      "services": [
+         {
+            "id": "s925hj-toolmanager",
+            "stack": "toolmanager",
+            "service": "toolmanager",
+            "imageTag": "",
+            "status": "ready",
+            "statusMessages": [
+               "Reason=, Message="
+            ],
+            "endpoints": [
+               {
+                  "host": "s925hj-toolmanager.local.ndslabs.org",
+                  "port": 8082,
+                  "nodePort": 0,
+                  "protocol": "http",
+                  "path": "/",
+                  "url": "s925hj-toolmanager.local.ndslabs.org/"
+               }
+            ],
+            "createdTime": 0,
+            "updateTime": 0,
+            "config": {},
+            "volumeMounts": {},
+            "internalIP": "10.111.75.103",
+            "resourceLimits": {
+               "cpuMax": "400m",
+               "cpuDefault": "200m",
+               "memMax": "512Mi",
+               "memDefault": "1Gi"
+            }
+         }
+      ],
+      "status": "started",
+      "createdTime": 0,
+      "updateTime": 0,
+      "secure": false
+   }
+}
