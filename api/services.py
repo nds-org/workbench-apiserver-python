@@ -1,6 +1,6 @@
 import logging
 
-from helper import etcdClient
+#from helper import etcdClient
 
 import json
 import connexion
@@ -12,12 +12,12 @@ def run():
     logging.info("Get services with catalog - "+catalog)
 
     services = []
-    if catalog == 'system':
-        services = etcdClient.getSystemServices()
-    elif catalog == 'user':
-        services = etcdClient.getUserServices()
-    else:  # catalog == all or others
-        services = etcdClient.getAllServices()
+#    if catalog == 'system':
+#        services = etcdClient.getSystemServices()
+#    elif catalog == 'user':
+#        services = etcdClient.getUserServices()
+#    else:  # catalog == all or others
+#        services = etcdClient.getAllServices()
 
     if 'x_access_token' in connexion.request.headers:
         token = connexion.request.headers['X-Access-Token']
@@ -30,7 +30,8 @@ def run():
 
 
 def get(service_id):
-    service = etcdClient.getServiceWithId(service_id)
+    #    service = etcdClient.getServiceWithId(service_id)
+    service = service_id
 
     if service is '':
         return '', 204

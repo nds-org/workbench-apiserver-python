@@ -6,10 +6,10 @@ import datetime
 import os
 
 from werkzeug.exceptions import Unauthorized
-from jose import JWTError, jwt, jws
+from jose import JWTError, JWSError, jwt, jws
 import six
 
-from helper import etcdClient
+#from helper import etcdClient
 
 JWT_SECRET = 'secret'
 JWT_ALGORITHM = 'HS256'
@@ -19,7 +19,7 @@ JWT_EXP_DELTA_MINS = 300
 def run():
     logging.info("Token info - "+connexion.context['token_info'])
 
-    return param
+    return None
 
 
 def post():
@@ -28,7 +28,7 @@ def post():
     password = reqJSON['password']
     print(username, password)
 
-    if etcdClient.checkPassword(username, password):
+    if True:  # etcdClient.checkPassword(username, password):
         token = {"token": generate_token(username)}
         return token, 200
     else:

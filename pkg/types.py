@@ -16,3 +16,8 @@ account_schema = {
     },
     "required": ["id", "email", "password"]
 }
+
+
+# TODO: Is manual validation needed?
+#def validate_account_info(account_info):
+#    return validate(instance=account_info, schema=account_schema)

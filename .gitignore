@@ -127,3 +127,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# ignore PyCharm IDE preferences
+.idea/
+
+# Random test files / specs
+*.yaml
+*.json
+*.tmp
+cookies

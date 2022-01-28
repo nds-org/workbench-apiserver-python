@@ -1,7 +1,7 @@
 import logging
 
 import connexion
-from brapiresolver import BrapiResolver
+from pkg.resolver import OperationResolver
 
 if __name__ == '__main__':
     debug = True
@@ -17,7 +17,7 @@ if __name__ == '__main__':
 
     app.add_api('openapi3-ndslabs.yaml',
                 arguments={'title': 'PYNDSLABS'},
-                resolver=BrapiResolver('api'),
+                resolver=OperationResolver('api'),
                 resolver_error=501)
 
     app.run(port=5000, host=None, server='flask', debug=debug)

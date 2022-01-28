@@ -3,8 +3,8 @@ import logging
 import json
 import connexion
 
-from helper import etcdClient
-from pkg import validate
+#from helper import etcdClient
+#from pkg import types
 
 
 def run():
@@ -27,7 +27,7 @@ def get(account_id):
 def put(account_id):
     print(connexion.request.json)
     account_info = connexion.request.json
-    # if validate.validate_account_info(account_info):
+    # if types.validate_account_info(account_info):
     #    return etcdClient.setAccountInfo(connexion.request.json), 200
     # else:
     #    return '', 204
