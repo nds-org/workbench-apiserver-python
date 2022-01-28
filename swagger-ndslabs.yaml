@@ -3,58 +3,80 @@ info:
   title: NDS Labs Workbench
   description: API for the NDS Labs Workbench service
   contact:
-   email: ndslabs-support@nationaldataservice.org
-   name:  NDS Labs Support
-   url: http://www.nationaldataservice.org/projects/labs.html
-  version: 1.2.0
-basePath: /api
+    email: ndslabs-support@nationaldataservice.org
+    name:  NDS Labs Support
+    url: http://www.nationaldataservice.org/projects/labs.html
+  version: 1.3.1
+basePath: /api/v1
 securityDefinitions:
-    jwt:
-      type: apiKey
-      name: Authorization
-      in: header
-      x-authentication-scheme: Bearer
-      x-bearerInfoFunc: pkg.jwt.WBJWT.decode
+  Bearer:
+    x-apikeyInfoFunc: 'pkg.jwt.validate_apikey_header'
+    type: apiKey
+    name: X-API-TOKEN
+    in: header
+  Cookie:
+    x-apikeyInfoFunc: 'pkg.jwt.validate_auth_cookie'
+    type: apiKey
+    name: Cookie
+    in: header
 schemes:
   - http
+  - https
 produces:
   - application/json
 consumes:
   - application/json
 parameters:
-  service-id:
-    name: service-id
+  service_id:
+    name: service_id
     in: path
     description: The unique service identifier
     type: string
     required: true
-  account-id:
-    name: account-id
+  account_id:
+    name: account_id
     in: path
     description: The unique account identifier
     type: string
     required: true
-  stack-id:
-    name: stack-id
+  stack_id:
+    name: stack_id
     in: path
     description: The unique stack identifier
     type: string
     required: true
-  stack-service-id:
-    name: stack-service-id
+  stack_service_id:
+    name: stack_service_id
     in: path
     description: The unique stack service identifier
     type: string
     required: true
-  vocab-name:
-    name: vocab-name
+  vocab_name:
+    name: vocab_name
     in: path
     description: Vocabulary name
     type: string
     required: true
 paths:
+  /version:
+    get:
+      tags:
+        - system
+      operationId: 'get_version'
+      x-swagger-router-controller: 'api.v1.system'
+      description: |
+        Retrieve the server version
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: string
   /authenticate:
     post:
+      tags:
+        - user account
+      operationId: 'post_authenticate'
+      x-swagger-router-controller: 'api.v1.user_auth'
       description: |
         Authenticate a user (login)
       parameters:
@@ -68,39 +90,46 @@ paths:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                $ref: '#/definitions/Token'
+            $ref: '#/definitions/Token'
         '401':
-          description: Not logged in
+          description: Invalid credentials
     delete:
+      security:
+        - Cookie: []
+      tags:
+        - user account
+      operationId: 'delete_authenticate'
+      x-swagger-router-controller: 'api.v1.user_auth'
       description: |
         Logout a user
       responses:
-        '200':
-          description: OK
-          schema:
-            type: object
-            properties:
-              data:
-                $ref: '#/definitions/Token'
+        '204':
+          description: Logout successful
   /refresh_token:
     get:
+      security:
+        - Bearer: []
+      tags:
+        - user account
+      operationId: 'refresh_token'
+      x-swagger-router-controller: 'api.v1.user_auth'
       description: |
         Refresh the JWT token
       responses:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                $ref: '#/definitions/Token'
+            $ref: '#/definitions/Token'
         '401':
           description: Not logged in
   /check_token:
     get:
+      security:
+        - Bearer: []
+      tags:
+        - user account
+      operationId: 'check_token'
+      x-swagger-router-controller: 'api.v1.user_auth'
       description: |
         Validate the JWT token
       parameters:
@@ -117,6 +146,10 @@ paths:
           description: Not logged in
   /services:
     get:
+      tags:
+        - app spec
+      operationId: 'list_services'
+      x-swagger-router-controller: 'api.v1.app_specs'
       description: |
         Retrieves a site-wide list of available service definitions.
       parameters:
@@ -129,13 +162,16 @@ paths:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                type: array
-                items:
-                  $ref: '#/definitions/Service'
+            type: array
+            items:
+              $ref: '#/definitions/Service'
     post:
+      security:
+        - Cookie: []
+      tags:
+        - app spec
+      operationId: 'create_service'
+      x-swagger-router-controller: 'api.v1.app_specs'
       description: |
         Adds a new service to the service library
       parameters:
@@ -148,21 +184,30 @@ paths:
       responses:
         '201':
           description: Created
-  '/services/{service-id}':
+  '/services/{service_id}':
     parameters:
-      - $ref: '#/parameters/service-id'
+      - $ref: '#/parameters/service_id'
     get:
+      security:
+        - Cookie: []
+      tags:
+        - app spec
+      operationId: 'get_service_by_id'
+      x-swagger-router-controller: 'api.v1.app_specs'
       description: |
         Retrieves the service definition.
       responses:
         '200':
           description: The service object
           schema:
-            type: object
-            properties:
-              data:
-                $ref: '#/definitions/Service'
+            $ref: '#/definitions/Service'
     put:
+      security:
+        - Cookie: []
+      tags:
+        - app spec
+      operationId: 'update_service'
+      x-swagger-router-controller: 'api.v1.app_specs'
       description: |
         Updates a service definition in the service library
       parameters:
@@ -176,6 +221,12 @@ paths:
         '201':
           description: Updated
     delete:
+      security:
+        - Cookie: []
+      tags:
+        - app spec
+      operationId: 'delete_service'
+      x-swagger-router-controller: 'api.v1.app_specs'
       description: |
         Delete a service
       responses:
@@ -183,21 +234,30 @@ paths:
           description: OK
   /accounts:
     get:
+      security:
+        - Bearer: []
+      tags:
+        - user account
+      operationId: 'list_accounts'
+      x-swagger-router-controller: 'api.v1.user_accounts'
       description: |
         Retrieves a site-wide list of NDSLabs accounts.
       responses:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                type: array
-                items:
-                  $ref: '#/definitions/Account'
+            type: array
+            items:
+              $ref: '#/definitions/Account'
         '404':
           description: Not found
     post:
+      security:
+        - Bearer: []
+      tags:
+        - user account
+      operationId: 'create_account'
+      x-swagger-router-controller: 'api.v1.user_accounts'
       description: |
         Adds a new accounts
       parameters:
@@ -210,21 +270,30 @@ paths:
       responses:
         '201':
           description: Created
-  '/accounts/{account-id}':
+  '/accounts/{account_id}':
     parameters:
-      - $ref: '#/parameters/account-id'
+      - $ref: '#/parameters/account_id'
     get:
+      security:
+        - Bearer: []
+      tags:
+        - user account
+      operationId: 'get_account_by_id'
+      x-swagger-router-controller: 'api.v1.user_accounts'
       description: |
         Retrieves basic information about a account.
       responses:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                $ref: '#/definitions/Account'
+            $ref: '#/definitions/Account'
     put:
+      security:
+        - Bearer: []
+      tags:
+        - user account
+      operationId: 'update_account'
+      x-swagger-router-controller: 'api.v1.user_accounts'
       description: |
         Updates account information
       parameters:
@@ -238,6 +307,12 @@ paths:
         '201':
           description: Updated
     delete:
+      security:
+        - Bearer: []
+      tags:
+        - user account
+      operationId: 'delete_account'
+      x-swagger-router-controller: 'api.v1.user_accounts'
       description: |
         Delete a account
       responses:
@@ -245,21 +320,30 @@ paths:
           description: OK
   /stacks:
     get:
+      security:
+        - Cookie: []
+      tags:
+        - user app
+      operationId: 'list_stacks'
+      x-swagger-router-controller: 'api.v1.user_apps'
       description: |
         Retrieves a list of stacks for this account.
       responses:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                type: array
-                items:
-                  $ref: '#/definitions/Stack'
+            type: array
+            items:
+              $ref: '#/definitions/Stack'
         '404':
           description: Not found
     post:
+      security:
+        - Cookie: []
+      tags:
+        - user app
+      operationId: 'create_stack'
+      x-swagger-router-controller: 'api.v1.user_apps'
       description: |
         Adds a new stack to this account
       parameters:
@@ -272,21 +356,30 @@ paths:
       responses:
         '201':
           description: Created
-  '/stacks/{stack-id}':
+  '/stacks/{stack_id}':
     parameters:
-      - $ref: '#/parameters/stack-id'
+      - $ref: '#/parameters/stack_id'
     get:
+      security:
+        - Bearer: []
+      tags:
+        - user app
+      operationId: 'get_stack_by_id'
+      x-swagger-router-controller: 'api.v1.user_apps'
       description: |
         Retrieves the stack definition.
       responses:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                $ref: '#/definitions/Stack'
+            $ref: '#/definitions/Stack'
     put:
+      security:
+        - Bearer: []
+      tags:
+        - user app
+      operationId: 'update_stack'
+      x-swagger-router-controller: 'api.v1.user_apps'
       description: |
         Updates stack information
       parameters:
@@ -300,15 +393,27 @@ paths:
         '201':
           description: Updated
     delete:
+      security:
+        - Bearer: []
+      tags:
+        - user app
+      operationId: 'delete_stack'
+      x-swagger-router-controller: 'api.v1.user_apps'
       description: |
         Delete a stack
       responses:
         '200':
           description: OK
-  '/stacks/{stack-id}/rename':
+  '/stacks/{stack_id}/rename':
     parameters:
-      - $ref: '#/parameters/stack-id'
+      - $ref: '#/parameters/stack_id'
     put:
+      security:
+        - Bearer: []
+      tags:
+        - user app
+      operationId: 'rename_stack'
+      x-swagger-router-controller: 'api.v1.user_apps'
       parameters:
         - name: name
           description: Stack name
@@ -321,50 +426,71 @@ paths:
       responses:
         '201':
           description: Updated
-  '/logs/{stack-service-id}':
+  '/logs/{stack_service_id}':
     parameters:
-      - $ref: '#/parameters/stack-service-id'
+      - $ref: '#/parameters/stack_service_id'
     get:
+      security:
+        - Bearer: []
+      tags:
+        - user app
+      operationId: 'get_stack_service_logs'
+      x-swagger-router-controller: 'api.v1.user_apps'
       description: |
         Retrieves the stack service log.
       responses:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                $ref: '#/definitions/Log'
+            $ref: '#/definitions/Log'
   '/start':
-      parameters:
-        - in: query
-          name: key
-          type: string
-          required: true
-          description: The key of the service spec to start and navigate to
-      get:
-        description: |
-          Adds, starts, and navigates to the specified application
-        responses:
-          '200':
-            description: OK
-          '400':
-            description: Application key was not given
-          '404':
-            description: Application key was not found
-  '/start/{stack-id}':
     parameters:
-      - $ref: '#/parameters/stack-id'
+      - in: query
+        name: key
+        type: string
+        required: true
+        description: The key of the service spec to start and navigate to
     get:
+      security:
+        - Bearer: []
+      tags:
+        - user app
+      operationId: 'quickstart_stack'
+      x-swagger-router-controller: 'api.v1.user_apps'
+      description: |
+        Adds, starts, and navigates to the specified application
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Application key was not given
+        '404':
+          description: Application key was not found
+  '/start/{stack_id}':
+    parameters:
+      - $ref: '#/parameters/stack_id'
+    get:
+      security:
+        - Bearer: []
+      tags:
+        - user app
+      operationId: 'start_stack'
+      x-swagger-router-controller: 'api.v1.user_apps'
       description: |
         Starts the specified stack
       responses:
         '200':
           description: OK
-  '/stop/{stack-id}':
+  '/stop/{stack_id}':
     parameters:
-      - $ref: '#/parameters/stack-id'
+      - $ref: '#/parameters/stack_id'
     get:
+      security:
+        - Bearer: []
+      tags:
+        - user app
+      operationId: 'stop_stack'
+      x-swagger-router-controller: 'api.v1.user_apps'
       description: |
         Stops the specified stack
       responses:
@@ -372,6 +498,12 @@ paths:
           description: OK
   /configs:
     get:
+      security:
+        - Bearer: []
+      tags:
+        - user app
+      operationId: 'get_stack_configs'
+      x-swagger-router-controller: 'api.v1.user_apps'
       parameters:
         - name: services
           in: query
@@ -387,26 +519,30 @@ paths:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                type: array
-                items:
-                  $ref: '#/definitions/Config'
-  /version:
+            type: array
+            items:
+              $ref: '#/definitions/Config'
+  /validate:
     get:
+      tags:
+        - user account
+      operationId: 'validate_o_auth_token'
+      x-swagger-router-controller: 'api.v1.user_accounts'
       description: |
-        Retrieve the server version
+        Check if the user has an active/valid OAuth session
       responses:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                type: string
+            type: string
+        '401':
+          description: Not logged in
   /register:
     post:
+      tags:
+        - user account
+      operationId: 'register_user'
+      x-swagger-router-controller: 'api.v1.user_accounts'
       description: |
         Register
       parameters:
@@ -419,25 +555,30 @@ paths:
       responses:
         '201':
           description: Created
-  '/vocabulary/{vocab-name}':
+  '/vocabulary/{vocab_name}':
     get:
+      tags:
+        - vocabulary
+      operationId: 'get_vocabulary_by_name'
+      x-swagger-router-controller: 'api.v1.vocabulary'
       parameters:
-        - $ref: '#/parameters/vocab-name'
+        - $ref: '#/parameters/vocab_name'
       description: |
         Retrieves a vocabulary
       responses:
         '200':
           description: OK
           schema:
-            type: object
-            properties:
-              data:
-                type: array
-                items:
-                  $ref: '#/definitions/Vocabulary'
-                  
+            $ref: '#/definitions/Vocabulary'
+
   '/change_password':
     put:
+      security:
+        - Bearer: []
+      tags:
+        - user account
+      operationId: 'change_password'
+      x-swagger-router-controller: 'api.v1.user_accounts'
       parameters:
         - name: password
           description: Change password object
@@ -455,6 +596,10 @@ paths:
           description: Updated
   '/register/verify':
     put:
+      tags:
+        - user account
+      operationId: 'verify_email_address'
+      x-swagger-router-controller: 'api.v1.user_accounts'
       parameters:
         - name: verify
           description: Verification object
@@ -480,6 +625,12 @@ paths:
         required: true
         type: string
     post:
+      security:
+        - Bearer: []
+      tags:
+        - user account
+      operationId: 'send_reset_password_email'
+      x-swagger-router-controller: 'api.v1.user_accounts'
       description: |
         Request password reset email.
       responses:
@@ -487,6 +638,12 @@ paths:
           description: OK
   '/support':
     post:
+      security:
+        - Bearer: []
+      tags:
+        - support
+      operationId: 'submit_help_request'
+      x-swagger-router-controller: 'api.support'
       description: |
         Submit a support request
       parameters:
@@ -501,7 +658,11 @@ paths:
           description: Created
   '/contact':
     get:
-      description: | 
+      tags:
+        - support
+      operationId: 'get_contact_info'
+      x-swagger-router-controller: 'api.support'
+      description: |
         Get contact information
       responses:
         '200':
@@ -527,6 +688,23 @@ definitions:
       name:
         type: string
   Service:
+    x-groupName: "ndslabs.org"
+    x-version: "v1"
+    x-scope: "Cluster"
+    x-shortNames:
+      - workbenchspec
+      - workbenchspecs
+      - wbappspec
+      - wbappspecs
+      - appspec
+      - appspecs
+      - wbspec
+      - wbspecs
+      - spec
+      - specs
+    x-singular: "workbenchappspec"
+    x-plural: "workbenchappspecs"
+    x-kind: "WorkbenchAppSpec"
     type: object
     properties:
       id:
@@ -541,6 +719,8 @@ definitions:
         type: string
       logo:
         type: string
+      info:
+        type: string
       display:
         type: string
       access:
@@ -548,7 +728,10 @@ definitions:
       developerEnvironment:
         type: string
       config:
-        $ref: '#/definitions/Config'
+        type: array
+        items:
+          $ref: '#/definitions/Config'
+        default: []
       readinessProbe:
         $ref: '#/definitions/ReadyProbe'
       image:
@@ -559,37 +742,48 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/ServiceDependency'
+        default: []
       ports:
         type: array
         items:
           $ref: '#/definitions/Port'
+        default: []
       volumeMounts:
         type: array
         items:
           $ref: '#/definitions/VolumeMount'
+        default: []
       repositories:
         type: array
         items:
           $ref: '#/definitions/Repository'
+        default: []
       command:
         type: array
         items:
           type: string
+        default: []
       args:
         type: array
         items:
           type: string
+        default: []
       tags:
         type: array
         items:
           type: string
+        default: []
       createdTime:
         type: integer
       updatedTime:
         type: integer
+    required:
+      - key
   ReadyProbe:
     type: object
     properties:
+      type:
+        type: string
       path:
         type: string
       port:
@@ -608,6 +802,8 @@ definitions:
   Repository:
     type: object
     properties:
+      type:
+        type: string
       port:
         type: string
       url:
@@ -615,7 +811,7 @@ definitions:
   ServiceDependency:
     type: object
     properties:
-      serviceId:
+      key:
         type: string
       required:
         type: boolean
@@ -625,6 +821,8 @@ definitions:
       id:
         type: string
       name:
+        type: string
+      email:
         type: string
       description:
         type: string
@@ -657,12 +855,31 @@ definitions:
           storage:
             type: string
   Stack:
+    x-groupName: "ndslabs.org"
+    x-version: "v1"
+    x-plural: "workbenchuserapps"
+    x-singular: "workbenchuserapp"
+    x-kind: "WorkbenchUserApp"
+    x-scope: "Namespaced"
+    x-shortNames:
+      - workbenchapp
+      - workbenchapps
+      - wbuserapp
+      - wbuserapps
+      - userapp
+      - userapps
+      - wbapp
+      - wbapps
+      - app
+      - apps
     type: object
     properties:
       id:
         type: string
       key:
         type: string
+      secure:
+        type: boolean
       name:
         type: string
       services:
@@ -673,47 +890,76 @@ definitions:
         type: string
       action:
         type: string
-      createTime:
+      createdTime:
         type: integer
       updateTime:
         type: integer
+    required:
+      - key
   StackService:
     type: object
     properties:
       id:
         type: string
-      stackId:
+      stack:
         type: string
-      serviceId:
+      createdTime:
+        type: integer
+      updateTime:
+        type: integer
+      service:
         type: string
       status:
         type: string
-      imageTag:
-        type: string
-      statusMessage:
+      statusMessages:
         type: array
         items:
           type: string
+      developerEnvironment:
+        type: string
+      config:
+        type: object
+        additionalProperties:
+          type: string
+        default: {}
+      internalIP:
+        type: string
+      readinessProbe:
+        $ref: '#/definitions/ReadyProbe'
+      imageTag:
+        type: string
+      resourceLimits:
+        $ref: '#/definitions/ResourceLimits'
+      volumeMounts:
+        type: object
+        additionalProperties:
+          type: string
+        default: {}
+      ports:
+        type: object
+        additionalProperties:
+          type: integer
+        default: {}
       endpoints:
         type: array
         items:
           type: object
           properties:
-            internalIP:
-              type: string
             host:
               type: string
-            ports:
-              type: array
-              items:
-                type: object
-              properties:
-                port:
-                  type: integer
-                nodePort:
-                  type: integer
-                protocol:
-                  type: string
+            path:
+              type: string
+            url:
+              type: string
+            port:
+              type: integer
+            nodePort:
+              type: integer
+            protocol:
+              type: string
+    required:
+      - stack
+      - service
   Log:
     type: object
     properties:
@@ -730,11 +976,15 @@ definitions:
         type: string
       canOverride:
         type: boolean
+        default: true
       isPassword:
         type: boolean
+        default: false
   ServiceImage:
     type: object
     properties:
+      registry:
+        type: string
       name:
         type: string
       tags:
@@ -746,12 +996,16 @@ definitions:
     properties:
       cpuMax:
         type: string
+        default: "400m"
       cpuDefault:
         type: string
+        default: "200m"
       memMax:
         type: string
+        default: "512mb"
       memDefault:
         type: string
+        default: "1gb"
   Vocabulary:
     type: object
     properties:
@@ -775,4 +1029,5 @@ definitions:
         type: string
       message:
         type: string
-              
+
+

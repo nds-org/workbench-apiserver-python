@@ -1,9 +1,12 @@
-import logging
 
-from helper import etcdClient
+#from helper import etcdClient
 
 import json
 import connexion
+
+import logging
+
+logger = logging.getLogger('api.v1.vocabulary')
 
 
 def search():

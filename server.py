@@ -1,8 +1,6 @@
 import logging
 
 import connexion
-# from brapiresolver import BrapiResolver
-
 from pkg import config, kube
 
 #from pkg.mongo import db
@@ -10,12 +8,9 @@ from pkg import config, kube
 logger = logging.getLogger("server")
 
 
-class DebugRestyResolver(connexion.RestyResolver):
-    def resolve_operation_id(self, operation):
-        result = super().resolve_operation_id(operation)
-        logger.debug(f"{operation} == {result}")
-        return result
 
+
+from pkg.resolver import OperationResolver, DebugRestyResolver
 
 if __name__ == '__main__':
     debug = True
@@ -44,12 +39,15 @@ if __name__ == '__main__':
     if str.startswith(config.SWAGGER_URL, "http"):
         # fetch remote swagger
         app.add_api(config.download_remote_swagger_to_temp_file(),
-                    resolver=DebugRestyResolver('api.v2'),
+                    #resolver=DebugRestyResolver('api.v2'),
+                    resolver=OperationResolver('api'),
                     arguments={'title': 'PYNDSLABS.V2'}, resolver_error=501)
     else:
         # use local swagger
         app.add_api(config.SWAGGER_URL,
                     resolver=DebugRestyResolver('api.v2'),
+                    #resolver=OperationResolver('api'),
                     arguments={'title': 'PYNDSLABS.V2'}, resolver_error=501)
+
 
     app.run(port=5000, host='0.0.0.0', server='flask', debug=debug)
