@@ -5,8 +5,9 @@ import os
 
 #from jsonschema import validate
 #from pkg import types
-
-from jose import JWTError, jwt
+import six
+from jose import JWTError, jwt, jws, JWSError
+from werkzeug.exceptions import Unauthorized
 
 from pkg import config
 
@@ -40,18 +41,84 @@ def decode(jwt_token):
     return jwt.decode(jwt_token, config.JWT_SECRET, config.JWT_ALGORITHM)
 
 
+def get_secret(user, token_info) -> str:
+    return '''
+    You are user_id {user} and the secret is 'wbevuec'.
+    Decoded token claims: {token_info}.
+    '''.format(user=user, token_info=token_info)
+
+
+def verify_token(token):
+    try:
+        jws.verify(token, config.JWT_SECRET, config.JWT_ALGORITHM)
+        return True, 200
+    except JWSError:
+        return JWSError, 401
+
+
+# Use this method to consistently check our default location for an auth token
+def get_token():
+    # Check cookie first
+    token_ckes = get_token_from_cookies()
+    if token_ckes != '':
+        return token_ckes
+
+    # If cookie not found, check for header
+    token_hdrs = get_token_from_headers()
+    if token_hdrs != '':
+        return token_hdrs
+
+    # Fallback to default Authorization/Bearer mechanism
+    token_auth = get_token_from_auth_header()
+    if token_auth != '':
+        return token_auth
+
+
+def get_token_from_auth_header():
+    if 'Authorization' in connexion.request.headers:
+        bearer_str = connexion.request.headers.get('Authorization')
+        # If the word "bearer" is included, remove it
+        if bearer_str.startswith('Bearer ') or bearer_str.startswith('bearer '):
+            bearer_str = bearer_str[7:]
+        return bearer_str
+    return ''
+
+
 def get_token_from_headers():
-    return connexion.request.headers.get('X-API-TOKEN')
+    if 'X-API-TOKEN' in connexion.request.headers:
+        return connexion.request.headers.get('X-API-TOKEN')
+    return ''
 
 
 def get_token_from_cookies():
-    return connexion.request.cookies.get('token')
+    if 'token' in connexion.request.cookies:
+        return connexion.request.cookies.get('token')
+    return ''
 
 
 def get_username_from_token():
     token = get_token_from_headers()
     claims = safe_decode(token)
     return claims['namespace']
+
+
+def validate_auth_header():
+    if 'Authorization' not in connexion.request.headers:
+        return 401   # Missing credentials / token
+
+    try:
+        # Fetch and decode X-API-TOKEN header
+        token = get_token_from_auth_header()
+        claims = jwt.decode(token)
+
+        # TODO: Check authorization
+        # return 403  # Credentials fine, but user is not allowed
+
+        return 200   # Credentials fine, access granted
+    except JWTError as e:
+        logger.error('Failed to decode JWT: ', e)
+        six.raise_from(Unauthorized, e)
+        return 401   # Bad credentials / bad format
 
 
 def validate_apikey_header():
@@ -69,13 +136,13 @@ def validate_apikey_header():
         return 200   # Credentials fine, access granted
     except JWTError as e:
         logger.error('Failed to decode JWT: ', e)
+        six.raise_from(Unauthorized, e)
         return 401   # Bad credentials / bad format
 
 
 def validate_auth_cookie():
     if 'token' not in connexion.request.cookies:
         return 401   # Missing credentials / token
-
 
     try:
         # Fetch and decode Cookie
@@ -88,4 +155,6 @@ def validate_auth_cookie():
         return 200  # Credentials fine, access granted
     except JWTError as e:
         logger.error('Failed to decode JWT: ', e)
+        six.raise_from(Unauthorized, e)
         return 401  # Bad credentials / bad format
+

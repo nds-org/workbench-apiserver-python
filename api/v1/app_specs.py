@@ -21,23 +21,23 @@ def create_service(service):
 
 def list_services(catalog='all'):
     args = connexion.request.args
-    catalog = args.get('catalog') # ????
+    catalog_arg = args.get('catalog')  # ??
+    logging.info("Get services with catalog - "+catalog)
+    logging.info("Get services with catalog arg - "+catalog_arg)
 
-    appspecs = []
+    token = jwt.get_token()
+    claims = jwt.safe_decode(token)
+    username = claims.username
+
     if catalog == 'system':
-        appspecs += data_store.fetch_system_appspecs()
+        services = data_store.fetch_system_appspecs()
+        return services, 200
     elif catalog == 'user':
-        if 'token' not in connexion.request.cookies:
-            return {'error': 'listing user appspecs requires valid login'}, 401
-        namespace = jwt.get_username_from_token()
-
-        appspecs += data_store.fetch_user_appspecs(namespace=namespace)
-    else:
-        appspecs += data_store.fetch_system_appspecs()
-        if 'token' in connexion.request.cookies:
-            namespace = jwt.get_username_from_token()
-            appspecs += data_store.fetch_user_appspecs(namespace=namespace)
-    return appspecs, 200
+        services = data_store.fetch_user_appspecs(username)
+        return services, 200
+    else:  # catalog == all or others
+        services = data_store.fetch_all_appspecs_for_user(username)
+        return services, 200
 
 
 def get_service_by_id(service_id):
@@ -69,7 +69,10 @@ def update_service(service_id, service):
 
 
 def delete_service(service_id):
-    service = data_store.fetch
+    token = jwt.get_token()
+    claims = jwt.safe_decode(token)
+    namespace = claims['username']
+    service = data_store.retrieve_user_appspec_by_key(namespace, service_id)
 
     if service['catalog'] == 'user':
         if namespace != service['creator']:

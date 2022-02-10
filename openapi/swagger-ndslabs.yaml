@@ -10,6 +10,11 @@ info:
 basePath: /api/v1
 securityDefinitions:
   Bearer:
+    x-apikeyInfoFunc: 'pkg.jwt.validate_auth_header'
+    type: apiKey
+    name: Authorization
+    in: header
+  ApiKey:
     x-apikeyInfoFunc: 'pkg.jwt.validate_apikey_header'
     type: apiKey
     name: X-API-TOKEN
@@ -314,7 +319,7 @@ paths:
       operationId: 'delete_account'
       x-swagger-router-controller: 'api.v1.user_accounts'
       description: |
-        Delete a account
+        Delete an account
       responses:
         '200':
           description: OK
