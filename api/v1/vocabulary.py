@@ -5,10 +5,11 @@ import connexion
 
 import logging
 
+from pkg.datastore import data_store
+
 logger = logging.getLogger('api.v1.vocabulary')
 
 
 def get_vocabulary_by_name(vocab_name):
-
-
-    return '', 200
+    vocabulary = data_store.fetch_vocab_by_name(vocab_name)
+    return vocabulary, 200

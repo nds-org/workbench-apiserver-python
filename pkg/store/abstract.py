@@ -90,4 +90,8 @@ class AbstractStore(ABC):
     def delete_userapp(self, namespace, userapp_id):
         pass
 
+    # Vocabulary
+    @abstractmethod
+    def fetch_vocab_by_name(self, vocab_name):
+        pass
 

@@ -52,8 +52,6 @@ class MongoStore(AbstractStore):
         return self.db[APPSPECS_COLLECTION_NAME].insert_one(new_appspec)
 
     def create_user_appspec(self, new_appspec):
-        new_appspec['creator'] = namespace
-        new_appspec['catalog'] = 'user'
         return self.db[APPSPECS_COLLECTION_NAME].insert_one(new_appspec)
 
     def fetch_user_appspecs(self, namespace):
@@ -109,6 +107,6 @@ class MongoStore(AbstractStore):
         return self.db[APPSPECS_COLLECTION_NAME].delete_one({'id': userapp_id,
                                                              'creator': namespace})
 
-
-
-
+    # Vocabulary
+    def fetch_vocab_by_name(self, vocab_name):
+        return self.db[VOCABULARIES_COLLECTION_NAME].find_one({'name': vocab_name})

@@ -249,6 +249,16 @@ class EtcdStore(AbstractStore):
         except etcd.EtcdKeyNotFound as e:
             logger.error("Failed to delete userapp by id in etcd:", e)
 
+    # Vocabulary
+    def fetch_vocab_by_name(self, vocab_name):
+        vocab_path = get_vocabularies_path() + "/" + vocab_name
+
+        try:
+            # Retrieve a vocabulary by name
+            return self.client.read(vocab_path)
+        except etcd.EtcdKeyNotFound as e:
+            logger.error("Failed to retrieve vocabulary by name in etcd:", e)
+
     ################################################################
     ################################################################
     ################################################################
@@ -355,3 +365,4 @@ class EtcdStore(AbstractStore):
             return False
         except ValueError:
             return False
+

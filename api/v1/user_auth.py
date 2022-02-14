@@ -37,17 +37,20 @@ def delete_authenticate():
 
 
 def refresh_token():
-    existing_token = jwt.get_token_from_headers()
+    existing_token = jwt.get_token()
     token_json = jwt.safe_decode(existing_token)
     token = {'token': jwt.encode(token_json['username'])}
     return token, 501
 
 
 def check_token():
-    existing_token = jwt.get_token_from_headers()
+    existing_token = jwt.get_token()
     try:
         jwt.decode(existing_token)
         return 'Token is valid', 200
     except JWTError as e:
         return 'Invalid token', 401
 
+
+def validate_o_auth_token():
+    return '', 501

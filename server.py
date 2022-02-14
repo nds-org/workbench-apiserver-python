@@ -4,13 +4,12 @@ import os
 import connexion
 from pkg import config, kube
 
-logger = logging.getLogger("server")
-
-
 from pkg.resolver import OperationResolver, DebugRestyResolver
 
+logger = logging.getLogger("server")
+
 if __name__ == '__main__':
-    debug = os.getenv('DEBUG', False)
+    debug = os.getenv('DEBUG', True)
 
     # kube.initialize()
 
@@ -26,13 +25,13 @@ if __name__ == '__main__':
     if str.startswith(config.SWAGGER_URL, "http"):
         # fetch remote openapi spec
         app.add_api(config.download_remote_swagger_to_temp_file(),
-                    # resolver=DebugRestyResolver('api.v2'),
+                    # resolver=DebugRestyResolver(),
                     resolver=OperationResolver('api'),
                     arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501)
     else:
         # use local openapi spec
         app.add_api(config.SWAGGER_URL,
-                    # resolver=DebugRestyResolver('api.v2'),
+                    # resolver=DebugRestyResolver(),
                     resolver=OperationResolver('api'),
                     arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501)
 

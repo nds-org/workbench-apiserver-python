@@ -2,7 +2,7 @@ import bcrypt
 import connexion
 import logging
 
-from pkg import jwt
+from pkg import jwt, mongo
 from pkg.datastore import data_store
 
 logger = logging.getLogger('api.v1.user_accounts')
@@ -12,10 +12,10 @@ def list_accounts():
     return users, 200
 
 
-def create_account(user):
-    result = data_store.create_user(user)
-    user.id = result.inserted_id
-    return user, 201
+def create_account(accounts):
+    result = data_store.create_user(accounts)
+    accounts['id'] = result.inserted_id
+    return mongo.parse_json(accounts), 201
 
 
 def get_account_by_id(account_id):
@@ -61,3 +61,21 @@ def update_account(account_id, account):
 def delete_account(account_id):
     result = data_store.delete_user(account_id)
     return 204
+
+
+def register_user(account):
+    # TODO: User signup workflow
+    return '', 501
+
+
+def change_password(password):
+    return '', 501
+
+
+def verify_email_address(verify):
+    return '', 501
+
+
+def send_reset_password_email(userId):
+    return '', 501
+
