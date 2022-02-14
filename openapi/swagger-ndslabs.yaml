@@ -262,6 +262,8 @@ paths:
         '404':
           description: Not found
     post:
+      security:
+        - Bearer: []
       tags:
         - user account
       operationId: 'create_account'
