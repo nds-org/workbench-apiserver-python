@@ -120,10 +120,6 @@ paths:
           schema:
             $ref: '#/definitions/Error'
     delete:
-      security:
-        - Bearer: []
-        - Cookie: []
-        - OAuth2: []
       tags:
         - user account
       operationId: 'delete_authenticate'

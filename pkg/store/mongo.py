@@ -39,9 +39,15 @@ def to_json(data):
 
 class MongoStore(AbstractStore):
 
-    # Sets up a new MongoClient with the given parameters
-    def __init__(self, host=config.MONGO_HOST, port=config.MONGO_PORT):
-        self.client = MongoClient(host=host, port=port)
+    # Sets up a new MongoClient with the given URI
+    def __init__(self):
+        self.client = MongoClient(config.MONGO_URI,
+                                  authSource='admin')
+        #self.client = MongoClient(host=config.MONGO_HOST,
+        #                          port=config.MONGO_PORT,
+        #                          username=config.MONGO_USER,
+        #                          password=config.MONGO_PASS,
+        #                          authSource='admin')
         self.db = self.client[config.MONGO_DATABASE]
 
     # UserAccounts

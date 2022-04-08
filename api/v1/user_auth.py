@@ -1,4 +1,7 @@
+from urllib.error import HTTPError
+
 import connexion
+import requests
 from jose import JWTError
 from werkzeug.exceptions import Unauthorized
 
@@ -18,6 +21,15 @@ def run():
     return None
 
 
+def new_user(username, password, email, name):
+    return {
+        'username': username,
+        'password': password,
+        'email': email,
+        'name': name
+    }
+
+
 def post_authenticate(auth):
     # req_json = connexion.request.json
     # auth_body = req_json['auth']
@@ -25,21 +37,35 @@ def post_authenticate(auth):
     username = auth_body['username']
     password = auth_body['password']
 
-    account = data_store.retrieve_user_by_username(username)
-    if account is None:
-        # Intentionally vague public error message, verbose log
-        return {'error': 'Invalid credentials'}, 401
-
     if config.USE_KEYCLOAK:
         try:
             tokens = keycloak.login(username, password)
             kube.init_user(username)
             token = tokens['access_token']
+            #account = data_store.retrieve_user_by_username(username)
+            #if account is None:
+            #    hashed_password = bcrypt.hashpw(password.encode('ascii'), bcrypt.gensalt())
+            #    account = data_store.create_user({'username': claims['sub'],
+            #                                      'password': hashed_password,
+            #                                      'email': claims['email'],
+            #                                      'name': claims['name']})
+            #    logger.info("First login detected - created shadow account: " % account)
+            #elif not bcrypt.checkpw(password.encode('ascii'), account['password']):
+            #    hashed_password = bcrypt.hashpw(password.encode('ascii'), bcrypt.gensalt())
+            #    account['password'] = hashed_password
+            #    data_store.update_user(account)
+            #    logger.info("Password mismatch detected.. synced shadow account: " % account)
             return {'token': token}, 200, {'Set-Cookie': 'token=%s' % token}
-        except Unauthorized as e:
-            logger.error('Failed keycloak login for %s: %s' % (username, str(e)))
+        except requests.exceptions.HTTPError as e:
+            # Intentionally vague public error message, verbose log
+            logger.error('Failed keycloak login for username=%s: %s' % (username, str(e)))
             return {'error': 'Invalid credentials'}, 401
     else:
+        account = data_store.retrieve_user_by_username(username)
+        if account is None:
+            # Intentionally vague public error message, verbose log
+            return {'error': 'Invalid credentials'}, 401
+
         if bcrypt.checkpw(password.encode('ascii'), account['password']):
             token = jwt.encode(username)
             kube.init_user(username)
@@ -49,7 +75,7 @@ def post_authenticate(auth):
             return {'error': 'Invalid credentials'}, 401
 
 
-def delete_authenticate(user, token_info):
+def delete_authenticate():
     # TODO: Do we store anything server-side related to sessions?
     if config.USE_KEYCLOAK:
         keycloak.logout()

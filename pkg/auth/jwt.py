@@ -7,6 +7,7 @@ import os
 #from pkg import types
 import six
 from jose import JWTError, jwt, jws, JWSError
+from jose.exceptions import JWKError
 from werkzeug.exceptions import Unauthorized, Forbidden, BadRequest
 
 from connexion.exceptions import Unauthorized
@@ -51,11 +52,18 @@ def encode(username):
 def safe_decode(jwt_token):
     try:
         return decode(jwt_token)
+    except JWKError as e:
+        logger.error('Failed to decode JWK: ', e)
+    except JWSError as e:
+        logger.error('Failed to decode JWS: ', e)
     except JWTError as e:
         logger.error('Failed to decode JWT: ', e)
 
 
 def decode(jwt_token):
+    if config.USE_KEYCLOAK:
+        logger.info(">>>>> Decoding using Keycloak Realm public key: %s" % config.KC_PUBLICKEY)
+        return jwt.decode(token=jwt_token, key=config.KC_PUBLICKEY, algorithms=["RS256"], audience=config.JWT_AUDIENCE)
     return jwt.decode(token=jwt_token, key=config.JWT_SECRET, algorithms=[config.JWT_ALGORITHM], audience=config.JWT_AUDIENCE)
 
 

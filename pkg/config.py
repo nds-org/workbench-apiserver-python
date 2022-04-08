@@ -5,6 +5,9 @@ import tempfile
 
 import logging
 
+from jose import jwk
+from jose.utils import base64url_decode
+
 logger = logging.getLogger('config')
 
 
@@ -21,9 +24,43 @@ ETCD_PORT = os.getenv('ETCD_PORT', 4001)
 ETCD_BASE_PATH = os.getenv('ETCD_BASE_PATH', '/ndslabs')
 
 # MongoStore
-MONGO_HOST = os.getenv('MONGO_HOST', '127.0.0.1')
-MONGO_PORT = os.getenv('MONGO_PORT', 27017)
-MONGO_DATABASE = os.getenv('MONGO_DB', 'ndslabs')
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://user:pass@localhost:27017/ndslabs')
+segments = MONGO_URI.split("//")[-1]   # strip off the protocol
+
+MONGO_USER = ''
+MONGO_PASS = ''
+MONGO_HOST = 'localhost'
+MONGO_PORT = 27017
+MONGO_DATABASE = segments.split("/")[-1]  # store the database name
+uri_segments = segments.split("/")[0]     # continue parsing the rest
+
+check_for_auth = uri_segments.split("@")      # check for auth
+if len(check_for_auth) == 2:
+    # we have an auth section
+    user_and_pass = check_for_auth[0].split(":")
+
+    # we know there is a username, check for password
+    MONGO_USER = user_and_pass[0]
+    if len(user_and_pass) == 2:
+        MONGO_PASS = user_and_pass[1]
+
+    # we know there is a username, check for password
+    host_and_port = check_for_auth[1].split(":")
+    MONGO_HOST = host_and_port[0]
+    if len(host_and_port) == 2:
+        MONGO_PORT = int(host_and_port[1])
+
+
+elif len(check_for_auth) == 1:
+    # we have no auth section
+    # we know there is a username, check for password
+    host_and_port = check_for_auth[-1].split(":")
+    MONGO_HOST = host_and_port[0]
+    if len(host_and_port) == 2:
+        MONGO_PORT = int(host_and_port[1])
+else:
+    logger.warning("Warning: too many auth segments - %s" % MONGO_URI)
+
 
 # Kubernetes
 KUBE_HOST = os.getenv('KUBE_HOST', 'localhost')
@@ -32,13 +69,7 @@ KUBE_TOKENPATH = os.getenv('KUBE_TOKENPATH', '/run/secrets/kubernetes.io/service
 KUBE_QPS = os.getenv('KUBE_QPS', 50)
 KUBE_BURST = os.getenv('KUBE_BURST', 100)
 
-
-# v2
-MONGO_USER = 'admin'
-MONGO_PASS = 'mysupersecretamazingawesomepasswordthatnobodycouldeverguess'
-MONGO_URI = 'mongodb://%s:%s@%s:%s/%s' % (MONGO_USER, MONGO_PASS, MONGO_HOST, MONGO_PORT, MONGO_DATABASE)
-
-
+# v2?
 KUBE_WORKBENCH_RESOURCE_PREFIX = ''
 KUBE_WORKBENCH_NAMESPACE = 'workbench'
 KUBE_SINGLEPOD = False   # TODO: Should we continue want to support this?
@@ -75,7 +106,7 @@ JWT_TIMEOUT = datetime.timedelta(minutes=JWT_EXP_DELTA_MINS)
 JWT_AUDIENCE = 'workbench-local'
 
 # Use central Keycloak?
-KEYCLOAK_HOST = os.getenv('KEYCLOAK_HOST', 'https://keycloak.workbench.ndslabs.org')
+KEYCLOAK_HOST = os.getenv('KEYCLOAK_HOST', 'http://localhost:8080/auth')
 KEYCLOAK_REALM = os.getenv('KEYCLOAK_REALM', 'workbench-dev')
 USE_KEYCLOAK = False if KEYCLOAK_HOST == '' or KEYCLOAK_REALM == '' else True
 
@@ -83,7 +114,7 @@ if not USE_KEYCLOAK:
     logger.warning('Using local JWT implementation. Please configure KC_HOST and KC_REALM ' +
                    'to use Keycloak JWT authentication instead.')
 else:
-    KC_REALM_URL = '%s/auth/realms/%s' % (KEYCLOAK_HOST, KEYCLOAK_REALM)
+    KC_REALM_URL = '%s/realms/%s' % (KEYCLOAK_HOST, KEYCLOAK_REALM)
     KC_OIDC_PREFIX = '%s/protocol/openid-connect' % KC_REALM_URL
     KC_TOKEN_URL = "%s/token" % KC_OIDC_PREFIX
     KC_USERINFO_URL = "%s/userinfo" % KC_OIDC_PREFIX
@@ -91,8 +122,8 @@ else:
 
     # system-generated params
     KC_GRANT_TYPE = 'password'
-    KC_CLIENT_ID = 'workbench-local'
-    KC_CLIENT_SECRET = '73305daa-c3d9-4ec7-aec0-caa9b030e182'
+    KC_CLIENT_ID = os.getenv('KEYCLOAK_CLIENT_ID', 'workbench-local')
+    KC_CLIENT_SECRET = os.getenv('KEYCLOAK_CLIENT_SECRET', '')
     KC_SCOPE = 'openid'
 
     # system-specific config
@@ -111,11 +142,23 @@ else:
         open_id_config = resp.json()
         # fetch from https://keycloak.workbench.ndslabs.org/auth/realms/workbench-dev
         KC_PUBLICKEY_BODY = open_id_config['public_key']
-        JWT_SECRET = '''
+        KC_OIDC_PREFIX = open_id_config["token-service"]
+        KC_PUBLICKEY = '''
         -----BEGIN PUBLIC KEY-----
         %s
         -----END PUBLIC KEY-----
         ''' % KC_PUBLICKEY_BODY
+        logger.info(">>>>> Loaded Keycloak Realm public key: %s" % KC_PUBLICKEY)
+        KC_OIDC_PREFIX = open_id_config["token-service"]
+        KC_TOKEN_URL = "%s/token" % KC_OIDC_PREFIX
+        KC_USERINFO_URL = "%s/userinfo" % KC_OIDC_PREFIX
+        KC_LOGOUT_URL = "%s/logout" % KC_OIDC_PREFIX
+        KC_CERTS_URL = "%s/certs" % KC_OIDC_PREFIX
+        resp = requests.get(KC_CERTS_URL)
+        keys = resp.json()
+        logger.info("Fetched keys: %s" % keys)
+        KC_PUBLICKEY = jwk.construct(keys['keys'][0])
+        logger.info("Using Keycloak Realm token service: %s" % KC_PUBLICKEY)
     except requests.exceptions.RequestException as e:
         logger.error("Failed to fetch keycloak realm config: %s" % e)
         raise SystemExit(e)
