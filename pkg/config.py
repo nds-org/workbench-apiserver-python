@@ -141,14 +141,6 @@ else:
         resp.raise_for_status()
         open_id_config = resp.json()
         # fetch from https://keycloak.workbench.ndslabs.org/auth/realms/workbench-dev
-        KC_PUBLICKEY_BODY = open_id_config['public_key']
-        KC_OIDC_PREFIX = open_id_config["token-service"]
-        KC_PUBLICKEY = '''
-        -----BEGIN PUBLIC KEY-----
-        %s
-        -----END PUBLIC KEY-----
-        ''' % KC_PUBLICKEY_BODY
-        logger.info(">>>>> Loaded Keycloak Realm public key: %s" % KC_PUBLICKEY)
         KC_OIDC_PREFIX = open_id_config["token-service"]
         KC_TOKEN_URL = "%s/token" % KC_OIDC_PREFIX
         KC_USERINFO_URL = "%s/userinfo" % KC_OIDC_PREFIX
