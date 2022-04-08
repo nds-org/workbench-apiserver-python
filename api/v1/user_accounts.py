@@ -76,6 +76,8 @@ def create_account(accounts):
 
 def get_account_by_id(account_id):
     user = data_store.retrieve_user_by_namespace(account_id)
+    if user is None:
+        return {'error': 'Not found username=%s' % account_id}, 404
     user['_id'] = str(user['_id'])
     del user['password']
     return user, 200
@@ -102,23 +104,33 @@ def change_password(password):
 
 
 def update_account(account_id, account):
-    account_info = connexion.request.json
-    logger.info(account_info)
+    token = jwt.get_token()
+    claims = jwt.safe_decode(token)
+    username = jwt.get_username_from_token(token)
 
-    if account_id != account.id:
+    if account_id != account['id']:
         return 'error: account id mismatch', 400
+
+    # Admins only: check token for required role
+    if username != account_id:
+        jwt.validate_scopes(['workbench-accounts'], claims)
 
     # Make sure user can't change password like this
     existing_account = data_store.retrieve_user_by_namespace(account.id)
     account.password = existing_account.password
-    result = data_store.update_user(account)
-
-    return account, 200
+    return mongo.parse_json(data_store.update_user(account)), 200
 
 
 def delete_account(account_id):
-    result = data_store.delete_user(account_id)
-    return 204
+    token = jwt.get_token()
+    claims = jwt.safe_decode(token)
+    username = jwt.get_username_from_token(token)
+
+    # Admins only: check token for required role
+    if username != account_id:
+        jwt.validate_scopes(['workbench-accounts'], claims)
+
+    return data_store.delete_user(account_id)
 
 
 def register_user(account):
