@@ -116,7 +116,9 @@ paths:
           schema:
             $ref: '#/definitions/Token'
         '401':
-          description: Invalid credentials
+          description: Unauthorized - invalid credentials
+          schema:
+            $ref: '#/definitions/Error'
     delete:
       security:
         - Bearer: []
@@ -130,7 +132,9 @@ paths:
         Logout a user
       responses:
         '204':
-          description: Logout successful
+          description: No Content (logout successful)
+        '401':
+          description: Unauthorized - missing or invalid login token
   /refresh_token:
     get:
       security:
@@ -149,7 +153,7 @@ paths:
           schema:
             $ref: '#/definitions/Token'
         '401':
-          description: Not logged in
+          description: Unauthorized - missing or invalid login token
   /check_token:
     get:
       security:
@@ -173,7 +177,7 @@ paths:
         '200':
           description: OK
         '401':
-          description: Not logged in
+          description: Unauthorized - missing or invalid login token
   /services:
     get:
       tags:
@@ -196,7 +200,9 @@ paths:
             items:
               $ref: '#/definitions/Service'
         '401':
-          description: Unauthorized
+          description: Unauthorized - missing or invalid login token
+          schema:
+            $ref: '#/definitions/Error'
 
     post:
       security:
@@ -219,10 +225,20 @@ paths:
       responses:
         '201':
           description: Created
+          schema:
+            $ref: '#/definitions/Service'
+        '401':
+          description: Unauthorized - missing or invalid login token
+        '403':
+          description: Forbidden - missing required scope
         '400':
           description: Validation failed - spec is invalid
+          schema:
+            $ref: '#/definitions/Error'
         '409':
           description: Conflict - spec key already exists
+          schema:
+            $ref: '#/definitions/Error'
   '/services/{service_id}':
     parameters:
       - $ref: '#/parameters/service_id'
@@ -235,11 +251,13 @@ paths:
         Retrieves the service definition.
       responses:
         '200':
-          description: The service object
+          description: OK
           schema:
             $ref: '#/definitions/Service'
         '404':
           description: Not found - spec key not found
+          schema:
+            $ref: '#/definitions/Error'
     put:
       security:
         - Bearer: [workbench-catalog]
@@ -259,14 +277,22 @@ paths:
             $ref: '#/definitions/Service'
           required: true
       responses:
-        '201':
+        '200':
           description: Update saved successfully
+          schema:
+            $ref: '#/definitions/Service'
         '400':
           description: Validation failed - spec is invalid
+          schema:
+            $ref: '#/definitions/Error'
         '403':
           description: Authorization failed - user is forbidden
+          schema:
+            $ref: '#/definitions/Error'
         '409':
           description: Conflict - spec key already exists
+          schema:
+            $ref: '#/definitions/Error'
     delete:
       security:
         - Bearer: [workbench-catalog]
@@ -283,6 +309,8 @@ paths:
           description: Deletion was successful
         '403':
           description: Authorization failed - user is forbidden
+          schema:
+            $ref: '#/definitions/Error'
   /accounts:
     get:
       security:
@@ -302,8 +330,14 @@ paths:
             type: array
             items:
               $ref: '#/definitions/Account'
+        '403':
+          description: Forbidden - user needs permissions to view other accounts
+          schema:
+            $ref: '#/definitions/Error'
         '404':
           description: Not found
+          schema:
+            $ref: '#/definitions/Error'
     post:
       security:
         - Bearer: [workbench-accounts]
@@ -325,6 +359,8 @@ paths:
       responses:
         '201':
           description: Created
+          schema:
+            $ref: '#/definitions/Account'
   '/accounts/{account_id}':
     parameters:
       - $ref: '#/parameters/account_id'
@@ -344,6 +380,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/Account'
+        '404':
+          description: Not found
+          schema:
+            $ref: '#/definitions/Error'
     put:
       security:
         - Bearer: []
@@ -363,8 +403,14 @@ paths:
             $ref: '#/definitions/Account'
           required: true
       responses:
-        '201':
-          description: Updated
+        '200':
+          description: Update successful
+          schema:
+            $ref: '#/definitions/Account'
+        '403':
+          description: Forbidden - user needs permissions to edit other accounts
+          schema:
+            $ref: '#/definitions/Error'
     delete:
       security:
         - Bearer: []
@@ -377,8 +423,12 @@ paths:
       description: |
         Delete an account
       responses:
-        '200':
-          description: OK
+        '204':
+          description: No Content (delete successful)
+        '403':
+          description: Forbidden - user needs permissions to edit other accounts
+          schema:
+            $ref: '#/definitions/Error'
   /stacks:
     get:
       security:
@@ -400,6 +450,8 @@ paths:
               $ref: '#/definitions/Stack'
         '404':
           description: Not found
+          schema:
+            $ref: '#/definitions/Error'
     post:
       security:
         - Bearer: []
@@ -421,6 +473,8 @@ paths:
       responses:
         '201':
           description: Created
+          schema:
+            $ref: '#/definitions/Stack'
   '/stacks/{stack_id}':
     parameters:
       - $ref: '#/parameters/stack_id'
@@ -459,8 +513,10 @@ paths:
             $ref: '#/definitions/Stack'
           required: true
       responses:
-        '201':
-          description: Updated
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/Stack'
     delete:
       security:
         - Bearer: []
@@ -473,8 +529,8 @@ paths:
       description: |
         Delete a stack
       responses:
-        '200':
-          description: OK
+        '204':
+          description: No Content (delete successful)
   '/stacks/{stack_id}/rename':
     parameters:
       - $ref: '#/parameters/stack_id'
@@ -498,8 +554,8 @@ paths:
       description: |
         Rename the stack
       responses:
-        '201':
-          description: Updated
+        '200':
+          description: OK
   '/logs/{stack_service_id}':
     parameters:
       - $ref: '#/parameters/stack_service_id'
@@ -540,10 +596,16 @@ paths:
       responses:
         '200':
           description: OK
+          schema:
+            $ref: '#/definitions/Stack'
         '400':
           description: Application key was not given
+          schema:
+            $ref: '#/definitions/Error'
         '404':
           description: Application key was not found
+          schema:
+            $ref: '#/definitions/Error'
   '/start/{stack_id}':
     parameters:
       - $ref: '#/parameters/stack_id'
@@ -561,6 +623,18 @@ paths:
       responses:
         '200':
           description: OK
+          schema:
+            $ref: '#/definitions/Stack'
+        '401':
+          description: Unauthorized - missing or invalid login token
+        '403':
+          description: Forbidden - missing required scope
+          schema:
+            $ref: '#/definitions/Error'
+        '404':
+          description: Not found
+          schema:
+            $ref: '#/definitions/Error'
   '/stop/{stack_id}':
     parameters:
       - $ref: '#/parameters/stack_id'
@@ -578,6 +652,16 @@ paths:
       responses:
         '200':
           description: OK
+          schema:
+            $ref: '#/definitions/Stack'
+        '401':
+          description: Unauthorized - missing or invalid login token
+        '403':
+          description: Forbidden - missing required scope
+        '404':
+          description: Not found
+          schema:
+            $ref: '#/definitions/Error'
   /configs:
     get:
       security:
@@ -620,7 +704,7 @@ paths:
           schema:
             type: string
         '401':
-          description: Not logged in
+          description: Unauthorized - missing or invalid login token
   /register:
     post:
       tags:
@@ -654,6 +738,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/Vocabulary'
+        '404':
+          description: Not found
+          schema:
+            $ref: '#/definitions/Error'
 
   '/change_password':
     put:
@@ -756,6 +844,13 @@ paths:
         '200':
           description: OK
 definitions:
+  Error:
+    type: object
+    required:
+      - error
+    properties:
+      error:
+        type: string
   Auth:
     type: object
     properties:
