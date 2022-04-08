@@ -1,0 +1,39 @@
+{
+    "key": "mongo",
+    "label": "MongoDB",
+    "image": { 
+		"name" : "mongo",
+		"tags" : ["3.2.4"]
+	},
+    "description": "A cross-platform document-oriented NoSQL database",
+	"display": "standalone",
+	"access": "internal",
+    "ports": [
+        { "port": 27017, "protocol": "tcp" }
+    ],
+    "volumeMounts":[
+        { "mountPath": "/data/db" }
+    ],
+    "resourceLimits": {
+        "cpuMax": "500m",
+        "cpuDefault": "100m",
+        "memMax": "250MB",
+        "memDefault": "100MB"
+    },
+    "readinessProbe" : {
+        "type" : "tcp",
+        "path" : "",
+        "port" : 27017,
+        "initialDelay": 10,
+        "timeout" : 60
+    },
+	"repositories" : [
+		{
+		"type" : "git",
+		"url" : "https://github.com/mongodb/mongo"
+		}
+	],
+	"logo" : "https://github.com/nds-org/ndslabs/raw/develop/gui/asset/png/logos/mongodb-logo.jpg",
+	"info" : "https://nationaldataservice.atlassian.net/wiki/display/NDSC/MongoDB",
+	"tags" : ["24"]
+}

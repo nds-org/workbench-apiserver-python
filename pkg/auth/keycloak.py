@@ -7,43 +7,20 @@ from jose import jwt
 import logging
 import json
 
-# system-generated params
-KC_GRANT_TYPE = 'password'
-KC_CLIENT_ID = 'workbench-local'
-KC_CLIENT_SECRET = '73305daa-c3d9-4ec7-aec0-caa9b030e182'
-KC_SCOPE = 'openid'
 
-# system-specific config
-# (create this Mapping in Keycloak)
-KC_AUDIENCE = 'workbench-local'
-
-KC_HOST = 'https://keycloak.workbench.ndslabs.org'
-KC_REALM = 'workbench-dev'
-KC_URL_PREFIX = '%s/auth/realms/%s/protocol/openid-connect' % (KC_HOST, KC_REALM)
-
-KC_TOKEN_PATH_SUFFIX = 'token'
-KC_USERINFO_PATH_SUFFIX = 'userinfo'
-KC_LOGOUT_PATH_SUFFIX = 'logout'
-
-KC_TOKEN_URL = "%s/%s" % (KC_URL_PREFIX, KC_TOKEN_PATH_SUFFIX)
-KC_USERINFO_URL = "%s/%s" % (KC_URL_PREFIX, KC_USERINFO_PATH_SUFFIX)
-KC_LOGOUT_URL = "%s/%s" % (KC_URL_PREFIX, KC_LOGOUT_PATH_SUFFIX)
-
-TOKENS_COOKIE_NAME = 'tokens'
-
-logger = logging.getLogger("keycloak")
+logger = logging.getLogger("pkg.auth.keycloak")
 
 
 def login(username, password):
-    resp = requests.post(KC_TOKEN_URL, {
+    resp = requests.post(config.KC_TOKEN_URL, {
         'username': username,
         'password': password,
 
-        'audience': KC_AUDIENCE,
-        'client_id': KC_CLIENT_ID,
-        'grant_type': KC_GRANT_TYPE,
-        'scope': KC_SCOPE,
-        'client_secret': KC_CLIENT_SECRET,
+        'audience': config.JWT_AUDIENCE,
+        'client_id': config.KC_CLIENT_ID,
+        'grant_type': config.KC_GRANT_TYPE,
+        'scope': config.KC_SCOPE,
+        'client_secret': config.KC_CLIENT_SECRET,
     })
 
     resp.raise_for_status()
@@ -57,9 +34,9 @@ def login(username, password):
 
 
 def logout():
-    resp = requests.post(KC_LOGOUT_URL, {
-        'client_id': KC_CLIENT_ID,
-        'client_secret': KC_CLIENT_SECRET,
+    resp = requests.post(config.KC_LOGOUT_URL, {
+        'client_id': config.KC_CLIENT_ID,
+        'client_secret': config.KC_CLIENT_SECRET,
         'refresh_token': get_refresh_token()
     })
     resp.raise_for_status()
@@ -67,7 +44,7 @@ def logout():
 
 def get_user_info():
     headers = { 'Authorization': 'Bearer %s' % get_access_token() }
-    resp = requests.get(KC_USERINFO_URL, headers=headers)
+    resp = requests.get(config.KC_USERINFO_URL, headers=headers)
     resp.raise_for_status()
     return resp.json()
 
@@ -86,9 +63,9 @@ def cookie_token_auth(cookies, required_scopes=None):
 def apikey_auth(token, required_scopes=None):
     logging.debug("Checking apikey token: " + str(token))
     if token != '':
-        access_token_jwt = jwt.decode(token, config.KC_PUBLICKEY,
+        access_token_jwt = jwt.decode(token, config.JWT_SECRET,
                                       algorithms=[config.JWT_ALGORITHM],
-                                      audience='workbench-local')
+                                      audience=config.JWT_AUDIENCE)
         return access_token_jwt
 
     # optional: raise exception for custom error response
@@ -117,8 +94,7 @@ def get_access_token():
 
 def get_access_token_jwt():
     access_token = get_access_token()
-    return jwt.decode(access_token, config.KC_PUBLICKEY,
+    return jwt.decode(access_token, config.JWT_SECRET,
                       algorithms=[config.JWT_ALGORITHM],
                       audience='workbench-local')
-
 

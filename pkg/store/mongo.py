@@ -1,10 +1,12 @@
 import bcrypt
+import logging
 
 from pymongo import MongoClient
 
 from pkg import config
 from pkg.store.abstract import AbstractStore
 
+logger=  logging.getLogger('pkg.store.mongo')
 
 # Hash the user's password before storing
 def hash_password(raw_password):
@@ -19,6 +21,20 @@ USERAPPS_COLLECTION_NAME = 'userapps'
 
 VOCABULARIES_COLLECTION_NAME = 'vocabularies'
 
+def serialize_id(entity):
+    #if entity is None:
+    #    return entity
+    #entity['_id'] = str(entity['_id'])
+    return entity
+
+
+def finalize_id(entity, inserted_id):
+    if entity is None or inserted_id is None:
+        return entity
+
+    entity['_id'] = str(inserted_id)
+    return entity
+
 
 class MongoStore(AbstractStore):
 
@@ -29,84 +45,110 @@ class MongoStore(AbstractStore):
 
     # UserAccounts
     def create_user(self, new_user):
-        return self.db[USER_ACCOUNTS_COLLECTION_NAME].insert_one(new_user)
+        created = self.db[USER_ACCOUNTS_COLLECTION_NAME].insert_one(new_user)
+        return finalize_id(new_user, created.inserted_id)
 
     def fetch_users(self):
         return list(self.db[USER_ACCOUNTS_COLLECTION_NAME].find())
 
-    def retrieve_user_by_namespace(self, namespace):
-        return self.db[USER_ACCOUNTS_COLLECTION_NAME].find_one({'namespace': namespace})
+    def retrieve_user_by_username(self, username):
+        return serialize_id(self.db[USER_ACCOUNTS_COLLECTION_NAME].find_one({'username': username}))
 
     def update_user(self, updated_user):
-        return self.db[USER_ACCOUNTS_COLLECTION_NAME].update_one({'namespace': updated_user['namespace']}, updated_user)
+        return serialize_id(self.db[USER_ACCOUNTS_COLLECTION_NAME].update_one({'username': updated_user['username']}, updated_user))
 
-    def delete_user(self, namespace):
-        return self.db[USER_ACCOUNTS_COLLECTION_NAME].delete_one({'namespace': namespace})
+    def delete_user(self, username):
+        deleted = self.db[USER_ACCOUNTS_COLLECTION_NAME].delete_one({'username': username})
+        return deleted.deleted_count
 
     # AppSpecs
-    def fetch_all_appspecs_for_user(self, namespace):
-        return self.fetch_system_appspecs() + self.fetch_user_appspecs(namespace)
+    def fetch_all_appspecs_for_user(self, username):
+        #return self.fetch_system_appspecs().update(self.fetch_user_appspecs(username))
+        return self.fetch_system_appspecs() + self.fetch_user_appspecs(username)
 
     def create_system_appspec(self, new_appspec):
         new_appspec['catalog'] = 'system'
-        return self.db[APPSPECS_COLLECTION_NAME].insert_one(new_appspec)
+        created = self.db[APPSPECS_COLLECTION_NAME].insert_one(new_appspec)
+        return finalize_id(new_appspec, created.inserted_id)
 
     def create_user_appspec(self, new_appspec):
-        return self.db[APPSPECS_COLLECTION_NAME].insert_one(new_appspec)
+        new_appspec['catalog'] = 'user'
+        created = self.db[APPSPECS_COLLECTION_NAME].insert_one(new_appspec)
+        return finalize_id(new_appspec, created.inserted_id)
 
-    def fetch_user_appspecs(self, namespace):
-        return list(self.db[APPSPECS_COLLECTION_NAME].find({'catalog': 'user',
-                                                            'creator': namespace}))
+    def fetch_user_appspecs(self, username):
+        user_specs = list(self.db[APPSPECS_COLLECTION_NAME].find({'catalog': 'user',
+                                                                  'creator': username}))
+        return user_specs   # self.to_spec_map(user_specs)
 
     def fetch_system_appspecs(self):
-        return list(self.db[APPSPECS_COLLECTION_NAME].find({'catalog': 'system'}))
+        system_specs = list(self.db[APPSPECS_COLLECTION_NAME].find({'catalog': 'system'}))
+        return system_specs   # self.to_spec_map(system_specs)
 
-    def retrieve_user_appspec_by_key(self, namespace, spec_key):
-        return self.db[APPSPECS_COLLECTION_NAME].find_one({'key': spec_key,
+    def retrieve_user_appspec_by_key(self, username, spec_key):
+        return serialize_id(self.db[APPSPECS_COLLECTION_NAME].find_one({'key': spec_key,
                                                            'catalog': 'user',
-                                                           'creator': namespace})
+                                                           'creator': username}))
 
     def retrieve_system_appspec_by_key(self, spec_key):
-        return self.db[APPSPECS_COLLECTION_NAME].find_one({'key': spec_key,
-                                                           'catalog': 'system'})
+        return serialize_id(self.db[APPSPECS_COLLECTION_NAME].find_one({'key': spec_key,
+                                                           'catalog': 'system'}))
 
-    def update_user_appspec(self, namespace, updated_appspec):
-        return self.db[APPSPECS_COLLECTION_NAME].update_one({'key': updated_appspec['key'],
+    def update_user_appspec(self, username, updated_appspec):
+        updated_appspec['catalog'] = 'user'
+        updated_appspec['creator'] = username
+        spec_key = updated_appspec['key']
+        updated = self.db[APPSPECS_COLLECTION_NAME].update_one(filter={'key': spec_key,
                                                              'catalog': 'user',
-                                                             'creator': namespace}, updated_appspec)
+                                                             'creator': username}, update={'$set': updated_appspec})
+        if updated.matched_count != updated.modified_count:
+            logger.warning('Warning: matched_docs=%d, but modified_docs=%d during update of %s appspec with key=%s' %
+                           (updated.matched_count, updated.modified_count, 'user', spec_key))
+
+        return updated_appspec
 
     def update_system_appspec(self, updated_appspec):
-        return self.db[APPSPECS_COLLECTION_NAME].update_one({'key': updated_appspec['key'],
-                                                             'catalog': 'system'}, updated_appspec)
+        spec_key = updated_appspec['key']
+        updated = self.db[APPSPECS_COLLECTION_NAME].update_one(filter={'key': spec_key,
+                                                             'catalog': 'system'}, update={'$set': updated_appspec})
 
-    def delete_user_appspec(self, namespace, spec_key):
-        return self.db[APPSPECS_COLLECTION_NAME].delete_one({'key': spec_key,
-                                                             'catalog': 'user',
-                                                             'creator': namespace})
+        if updated.matched_count != updated.modified_count:
+            logger.warning('Warning: matched_docs=%d, but modified_docs=%d during update of %s appspec with key=%s' %
+                           (updated.matched_count, updated.modified_count, 'user', spec_key))
+        return updated_appspec
+
+    def delete_user_appspec(self, username, spec_key):
+        deleted = self.db[APPSPECS_COLLECTION_NAME].delete_one({'key': spec_key,
+                                                                'catalog': 'user',
+                                                                'creator': username})
+        return deleted.deleted_count
 
     def delete_system_appspec(self, spec_key):
-        return self.db[APPSPECS_COLLECTION_NAME].delete_one({'key': spec_key,
-                                                             'catalog': 'system'})
+        deleted = self.db[APPSPECS_COLLECTION_NAME].delete_one({'key': spec_key,
+                                                                'catalog': 'system'})
+        return deleted.deleted_count
 
     # UserApps
     def create_userapp(self, new_userapp):
-        return self.db[USERAPPS_COLLECTION_NAME].insert_one(new_userapp)
+        created = self.db[USERAPPS_COLLECTION_NAME].insert_one(new_userapp)
+        return finalize_id(new_userapp, created.inserted_id)
 
-    def fetch_userapps(self, namespace):
-        return list(self.db[USERAPPS_COLLECTION_NAME].find({'creator': namespace}))
+    def fetch_userapps(self, username):
+        return list(self.db[USERAPPS_COLLECTION_NAME].find({'creator': username}))
 
-    def retrieve_userapp_by_id(self, namespace, userapp_id):
-        return self.db[USERAPPS_COLLECTION_NAME].find_one({'id': userapp_id,
-                                                           'creator': namespace})
+    def retrieve_userapp_by_id(self, username, userapp_id):
+        return serialize_id(self.db[USERAPPS_COLLECTION_NAME].find_one({'id': userapp_id,
+                                                           'creator': username}))
 
     def update_userapp(self, updated_userapp):
-        return self.db[APPSPECS_COLLECTION_NAME].update_one({'id': updated_userapp['id'],
-                                                             'creator': updated_userapp['creator']}, updated_userapp)
+        return serialize_id(self.db[APPSPECS_COLLECTION_NAME].update_one({'id': updated_userapp['id'],
+                                                             'creator': updated_userapp['creator']}, updated_userapp))
 
-    def delete_userapp(self, namespace, userapp_id):
-        return self.db[APPSPECS_COLLECTION_NAME].delete_one({'id': userapp_id,
-                                                             'creator': namespace})
+    def delete_userapp(self, username, userapp_id):
+        deleted = self.db[APPSPECS_COLLECTION_NAME].delete_one({'id': userapp_id,
+                                                                'creator': username})
+        return deleted.deleted_count
 
     # Vocabulary
     def fetch_vocab_by_name(self, vocab_name):
-        return self.db[VOCABULARIES_COLLECTION_NAME].find_one({'name': vocab_name})
+        return serialize_id(self.db[VOCABULARIES_COLLECTION_NAME].find_one({'name': vocab_name}))

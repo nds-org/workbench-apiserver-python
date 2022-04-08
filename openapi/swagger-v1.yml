@@ -10,25 +10,39 @@ info:
 basePath: /api/v1
 securityDefinitions:
   Query:
-    x-apikeyInfoFunc: 'pkg.jwt.validate_apikey_querystring'
+    x-apikeyInfoFunc: 'pkg.auth.jwt.validate_apikey_querystring'
     type: apiKey
-    name: apiKey
+    name: token
     in: query
   Bearer:
-    x-apikeyInfoFunc: 'pkg.jwt.validate_auth_header'
+    x-apikeyInfoFunc: 'pkg.auth.jwt.validate_auth_header'
     type: apiKey
     name: Authorization
     in: header
-  ApiKey:
-    x-apikeyInfoFunc: 'pkg.jwt.validate_apikey_header'
+  Header:
+    # x-apikeyInfoFunc: 'pkg.auth.keycloak.apikey_auth'
+    x-apikeyInfoFunc: 'pkg.auth.jwt.validate_apikey_header'
     type: apiKey
     name: X-API-TOKEN
     in: header
   Cookie:
-    x-apikeyInfoFunc: 'pkg.jwt.validate_auth_cookie'
+    # x-apikeyInfoFunc: 'pkg.auth.keycloak.cookie_token_auth'
+    x-apikeyInfoFunc: 'pkg.auth.jwt.validate_auth_cookie'
     type: apiKey
     name: Cookie
     in: header
+  OAuth2:
+    authorizationUrl: https://example.com/oauth2/dialog
+    # the token info URL is hardcoded for our mock_tokeninfo.py script
+    # you can also pass it as an environment variable TOKENINFO_URL
+    #x-tokenInfoUrl: http://localhost:7979/tokeninfo
+    type: oauth2
+    flow: implicit
+    scopes:
+      workbench-admin: Allow admin operations
+      workbench-accounts: Allow account management operations
+      workbench-catalog: Allow personal catalog operations
+      workbench-dev: Raise resourceLimits for developers
 schemes:
   - http
   - https
@@ -105,7 +119,9 @@ paths:
           description: Invalid credentials
     delete:
       security:
+        - Bearer: []
         - Cookie: []
+        - OAuth2: []
       tags:
         - user account
       operationId: 'delete_authenticate'
@@ -119,6 +135,8 @@ paths:
     get:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user account
       operationId: 'refresh_token'
@@ -136,6 +154,8 @@ paths:
     get:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user account
       operationId: 'check_token'
@@ -175,9 +195,14 @@ paths:
             type: array
             items:
               $ref: '#/definitions/Service'
+        '401':
+          description: Unauthorized
+
     post:
       security:
-        - Cookie: []
+        - Bearer: [workbench-catalog]
+        - Cookie: [workbench-catalog]
+        - OAuth2: [workbench-catalog]
       tags:
         - app spec
       operationId: 'create_service'
@@ -194,12 +219,14 @@ paths:
       responses:
         '201':
           description: Created
+        '400':
+          description: Validation failed - spec is invalid
+        '409':
+          description: Conflict - spec key already exists
   '/services/{service_id}':
     parameters:
       - $ref: '#/parameters/service_id'
     get:
-      security:
-        - Cookie: []
       tags:
         - app spec
       operationId: 'get_service_by_id'
@@ -211,15 +238,19 @@ paths:
           description: The service object
           schema:
             $ref: '#/definitions/Service'
+        '404':
+          description: Not found - spec key not found
     put:
       security:
-        - Cookie: []
+        - Bearer: [workbench-catalog]
+        - Cookie: [workbench-catalog]
+        - OAuth2: [workbench-catalog]
       tags:
         - app spec
       operationId: 'update_service'
       x-swagger-router-controller: 'api.v1.app_specs'
       description: |
-        Updates a service definition in the service library
+        Updates a service definition in the app catalog
       parameters:
         - name: service
           in: body
@@ -229,10 +260,18 @@ paths:
           required: true
       responses:
         '201':
-          description: Updated
+          description: Update saved successfully
+        '400':
+          description: Validation failed - spec is invalid
+        '403':
+          description: Authorization failed - user is forbidden
+        '409':
+          description: Conflict - spec key already exists
     delete:
       security:
-        - Cookie: []
+        - Bearer: [workbench-catalog]
+        - Cookie: [workbench-catalog]
+        - OAuth2: [workbench-catalog]
       tags:
         - app spec
       operationId: 'delete_service'
@@ -240,12 +279,16 @@ paths:
       description: |
         Delete a service
       responses:
-        '200':
-          description: OK
+        '204':
+          description: Deletion was successful
+        '403':
+          description: Authorization failed - user is forbidden
   /accounts:
     get:
       security:
-        - Bearer: []
+        - Bearer: [workbench-accounts]
+        - Cookie: [workbench-accounts]
+        - OAuth2: [workbench-accounts]
       tags:
         - user account
       operationId: 'list_accounts'
@@ -263,7 +306,9 @@ paths:
           description: Not found
     post:
       security:
-        - Bearer: []
+        - Bearer: [workbench-accounts]
+        - Cookie: [workbench-accounts]
+        - OAuth2: [workbench-accounts]
       tags:
         - user account
       operationId: 'create_account'
@@ -286,6 +331,8 @@ paths:
     get:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user account
       operationId: 'get_account_by_id'
@@ -300,6 +347,8 @@ paths:
     put:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user account
       operationId: 'update_account'
@@ -319,6 +368,8 @@ paths:
     delete:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user account
       operationId: 'delete_account'
@@ -331,7 +382,9 @@ paths:
   /stacks:
     get:
       security:
+        - Bearer: []
         - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'list_userapps'
@@ -349,7 +402,9 @@ paths:
           description: Not found
     post:
       security:
+        - Bearer: []
         - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'create_userapp'
@@ -372,6 +427,8 @@ paths:
     get:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'get_userapp_by_id'
@@ -386,6 +443,8 @@ paths:
     put:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'update_userapp'
@@ -405,6 +464,8 @@ paths:
     delete:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'delete_userapp'
@@ -418,8 +479,11 @@ paths:
     parameters:
       - $ref: '#/parameters/stack_id'
     put:
+      deprecated: true
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'rename_userapp'
@@ -442,6 +506,8 @@ paths:
     get:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'get_stack_service_logs'
@@ -463,12 +529,14 @@ paths:
     get:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'quickstart_stack'
       x-swagger-router-controller: 'api.v1.user_apps'
       description: |
-        Adds, starts, and navigates to the specified application
+        Quickstarts (adds, starts, and navigates to) the specified application
       responses:
         '200':
           description: OK
@@ -482,6 +550,8 @@ paths:
     get:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'start_stack'
@@ -497,6 +567,8 @@ paths:
     get:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'stop_stack'
@@ -510,6 +582,8 @@ paths:
     get:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user app
       operationId: 'get_stack_configs'
@@ -585,6 +659,8 @@ paths:
     put:
       security:
         - Bearer: []
+        - Cookie: []
+        - OAuth2: []
       tags:
         - user account
       operationId: 'change_password'
@@ -606,6 +682,7 @@ paths:
           description: Updated
   '/register/verify':
     put:
+      deprecated: true
       tags:
         - user account
       operationId: 'verify_email_address'
@@ -635,6 +712,7 @@ paths:
         required: true
         type: string
     post:
+      deprecated: true
       security:
         - Bearer: []
       tags:
@@ -723,6 +801,12 @@ definitions:
         type: string
       label:
         type: string
+      catalog:
+        type: string
+        enum:
+          - system
+          - user
+        default: user
       description:
         type: string
       maintainer:
@@ -789,6 +873,7 @@ definitions:
         type: integer
     required:
       - key
+      - image
   ReadyProbe:
     type: object
     properties:
@@ -808,6 +893,8 @@ definitions:
       port:
         type: integer
       protocol:
+        type: string
+      contextPath:
         type: string
   Repository:
     type: object
@@ -945,11 +1032,6 @@ definitions:
         additionalProperties:
           type: string
         default: {}
-      ports:
-        type: object
-        additionalProperties:
-          type: integer
-        default: {}
       endpoints:
         type: array
         items:
@@ -1001,6 +1083,9 @@ definitions:
         type: array
         items:
           type: string
+        default: []
+    required:
+      - name
   ResourceLimits:
     type: object
     properties:

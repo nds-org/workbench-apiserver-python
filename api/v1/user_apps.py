@@ -1,8 +1,8 @@
-import connexion
-
 import logging
+from builtins import range
 
-from pkg import jwt
+from pkg import kube
+from pkg.auth import jwt
 from pkg.datastore import data_store
 
 import time
@@ -15,22 +15,21 @@ seed(time.time() * 1000)
 
 def generate_random_id():
     # generate 5 random digits to form a userapp Id
-    d1 = randint(0, 9)
-    d2 = randint(0, 9)
-    d3 = randint(0, 9)
-    d4 = randint(0, 9)
-    d5 = randint(0, 9)
+    new_id = 's'
+    for d in range(0, 5):
+        new_id += str(randint(0, 9))
+
+    return new_id
 
 
-    return 's%d%d%d%d%d' % (d1, d2, d3, d4, d5)
-
-def generate_unique_id():
+def generate_unique_id(username):
     while True:
         # Generate random userapp id
         userapp_id = generate_random_id()
 
         # Ensure that this id is unique
-        userapp = data_store.retrieve_userapp_by_id(userapp_id)
+        namespace = kube.get_resource_namespace(username)
+        userapp = data_store.retrieve_userapp_by_id(namespace, userapp_id)
 
         # No match found - id is unique!
         if userapp is None:
@@ -40,32 +39,54 @@ def generate_unique_id():
 def list_userapps():
     token = jwt.get_token()
     claims = jwt.safe_decode(token)
-    namespace = claims.username
 
-    userapps = data_store.fetch_userapps(namespace)
+    username = jwt.get_username_from_token(token)
+
+    userapps = data_store.fetch_userapps(username)
 
     return userapps, 200
+
+
+def get_service_port_numbers(port):
+    return port['number']
+
+
+def to_spec_map(specs, existing_map=None):
+    spec_map = existing_map if existing_map is not None else {}
+    for spec in specs:
+        spec_key = spec['key']
+        spec_map[spec_key] = spec
+    return spec_map
 
 
 def create_userapp(stack):
     token = jwt.get_token()
     claims = jwt.safe_decode(token)
-    namespace = claims.username
+    username = jwt.get_username_from_token(token)
 
-    stack['creator'] = namespace
-    stack['id'] = generate_unique_id()
+    stack['creator'] = username
+    #stack['_id'] = generate_unique_id(username)
 
-    created = data_store.create_userapp(stack)
+    spec_map = to_spec_map(data_store.fetch_all_appspecs_for_user(username))
 
-    return created, 201
+    #try:
+    kube.create_userapp(username=username, userapp=stack, spec_map=spec_map)
+    stack = data_store.create_userapp(stack)
+
+    return stack, 201
+    #except Exception as e:
+    #    logger.error('Failed to create userapp: %s' % str(e))
+    #    return 'Error', 400
+
+    #return 'Something went wrong', 500
 
 
 def get_userapp_by_id(stack_id):
     token = jwt.get_token()
     claims = jwt.safe_decode(token)
-    namespace = claims.username
+    namespace = claims['username']
 
-    userapp = data_store.retrieve_userapp_by_id(namespace, stack_id)
+    userapp = data_store.retrieve_userapp_by_id(namespace, userapp_id=stack_id)
 
     return userapp, 200
 
@@ -73,11 +94,11 @@ def get_userapp_by_id(stack_id):
 def update_userapp(stack_id, stack):
     token = jwt.get_token()
     claims = jwt.safe_decode(token)
-    namespace = claims.username
+    username = jwt.get_username_from_token(token)
 
     if stack['id'] != stack_id:
         return 'Bad Request: ID mismatch', 400
-    if stack['creator'] != namespace:
+    if stack['creator'] != username:
         return 'Only the owner may modify a userapp', 403
 
     updated = data_store.update_userapp(stack)
@@ -87,14 +108,18 @@ def update_userapp(stack_id, stack):
 def delete_userapp(stack_id):
     token = jwt.get_token()
     claims = jwt.safe_decode(token)
-    namespace = claims.username
+    username = jwt.get_username_from_token(token)
 
     # Verify that this user is the owner
     userapp = data_store.retrieve_userapp_by_id(stack_id)
-    if userapp['creator'] != namespace:
+    if userapp['creator'] != username:
         return 'Only the owner may delete a userapp', 403
 
-    deleted = data_store.delete_userapp(stack_id)
+    try:
+        deleted = data_store.delete_userapp(stack_id)
+        kube.destroy_userapp(username, userapp)
+    except Exception as e:
+        logger.error('Failed to delete userapp: ' % str(e))
 
     return '', 200
 
@@ -102,11 +127,11 @@ def delete_userapp(stack_id):
 def rename_userapp(stack_id, name):
     token = jwt.get_token()
     claims = jwt.safe_decode(token)
-    namespace = claims.username
+    username = jwt.get_username_from_token(token)
     userapp = data_store.retrieve_userapp_by_id(stack_id)
 
     # Verify that this user is the owner
-    if userapp['creator'] != namespace:
+    if userapp['creator'] != username:
         return 'Only the owner may rename a userapp', 403
 
     # Change the name
@@ -141,27 +166,25 @@ def get_stack_service_logs(stack_service_id):
 
 def quickstart_stack(key):
     token = jwt.get_token()
-    claims = jwt.safe_decode(token)
-    namespace = claims.username
+    username = jwt.get_username_from_token(token)
 
     # TODO: Check if user already has an instance of this app
     # TODO: If it exists, start it up and return
     # TODO: If it does not exist, create, start, then return
 
-
-    return '', 200
+    return '', 501
 
 
 def start_stack(stack_id):
     token = jwt.get_token()
     claims = jwt.safe_decode(token)
-    namespace = claims.username
+    username = jwt.get_username_from_token(token)
 
     # Lookup userapp using the id
     userapp = data_store.retrieve_userapp_by_id(stack_id)
 
     # Verify that this user is the owner
-    if userapp['creator'] != namespace:
+    if userapp['creator'] != username:
         return 'Only the owner may launch a userapp', 403
 
     # TODO: Create Deployment in Kubernetes
@@ -177,13 +200,13 @@ def start_stack(stack_id):
 def stop_stack(stack_id):
     token = jwt.get_token()
     claims = jwt.safe_decode(token)
-    namespace = claims.username
+    username = jwt.get_username_from_token(token)
 
     # Lookup userapp using the id
     userapp = data_store.retrieve_userapp_by_id(stack_id)
 
     # Verify that this user is the owner
-    if userapp['creator'] != namespace:
+    if userapp['creator'] != username:
         return 'Only the owner may shutdown a userapp', 403
 
     # TODO: Delete Deployment in Kubernetes
@@ -207,10 +230,10 @@ def get_config_from_appspec(appspec):
 def get_stack_configs(services=None):
     token = jwt.get_token()
     claims = jwt.safe_decode(token)
-    namespace = claims.username
+    username = jwt.get_username_from_token(token)
 
     configs = []
-    all_appspecs = data_store.fetch_all_appspecs_for_user(namespace)
+    all_appspecs = data_store.fetch_all_appspecs_for_user(username)
     all_appspec_keys = list(map(get_key_from_appspec, all_appspecs))
 
     if services is None:

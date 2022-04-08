@@ -1,0 +1,51 @@
+{
+  "id": "s9jdxr",
+  "key": "girder",
+  "name": "Girder",
+  "services": [
+    {
+      "id": "s9jdxr-girder",
+      "stack": "girder",
+      "service": "girder",
+      "imageTag": "",
+      "status": "",
+      "statusMessages": [],
+      "createdTime": 0,
+      "updateTime": 0,
+      "config": {},
+      "volumeMounts": {},
+      "internalIP": "",
+      "resourceLimits": {
+        "cpuMax": "500",
+        "cpuDefault": "100",
+        "memMax": "2000",
+        "memDefault": "50"
+      }
+    },
+    {
+      "id": "s9jdxr-mongo",
+      "stack": "girder",
+      "service": "mongo",
+      "imageTag": "",
+      "status": "",
+      "statusMessages": [],
+      "createdTime": 0,
+      "updateTime": 0,
+      "config": {},
+      "volumeMounts": {
+        "AppData/s9jdxr-mongo-wmdlh": "/data/db"
+      },
+      "internalIP": "",
+      "resourceLimits": {
+        "cpuMax": "500",
+        "cpuDefault": "100",
+        "memMax": "250",
+        "memDefault": "100"
+      }
+    }
+  ],
+  "status": "stopped",
+  "createdTime": 0,
+  "updateTime": 0,
+  "secure": false
+}

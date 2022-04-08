@@ -11,14 +11,14 @@ logger = logging.getLogger("server")
 if __name__ == '__main__':
     debug = os.getenv('DEBUG', True)
 
-    # kube.initialize()
-
     if debug:
         logging.basicConfig(
             format='%(asctime)-15s %(message)s', level=logging.DEBUG)
     else:
         logging.basicConfig(
             format='%(asctime)-15s %(message)s', level=logging.INFO)
+
+    kube.initialize()
 
     app = connexion.FlaskApp(__name__, debug=debug)
 
@@ -27,12 +27,14 @@ if __name__ == '__main__':
         app.add_api(config.download_remote_swagger_to_temp_file(),
                     # resolver=DebugRestyResolver(),
                     resolver=OperationResolver('api'),
-                    arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501)
+                    arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501,
+                    strict_validation=True)
     else:
         # use local openapi spec
         app.add_api(config.SWAGGER_URL,
                     # resolver=DebugRestyResolver(),
                     resolver=OperationResolver('api'),
-                    arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501)
+                    arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501,
+                    strict_validation=True)
 
     app.run(port=5000, host='0.0.0.0', server='flask', debug=debug)

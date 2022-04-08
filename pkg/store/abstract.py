@@ -13,7 +13,7 @@ class AbstractStore(ABC):
         pass
 
     @abstractmethod
-    def retrieve_user_by_namespace(self, namespace):
+    def retrieve_user_by_username(self, username):
         pass
 
     @abstractmethod
@@ -21,12 +21,12 @@ class AbstractStore(ABC):
         pass
 
     @abstractmethod
-    def delete_user(self, namespace):
+    def delete_user(self, username):
         pass
 
     # AppSpecs
     @abstractmethod
-    def fetch_all_appspecs_for_user(self, namespace):
+    def fetch_all_appspecs_for_user(self, username):
         pass
 
     @abstractmethod
@@ -38,7 +38,7 @@ class AbstractStore(ABC):
         pass
 
     @abstractmethod
-    def fetch_user_appspecs(self, namespace):
+    def fetch_user_appspecs(self, username):
         pass
 
     @abstractmethod
@@ -46,7 +46,7 @@ class AbstractStore(ABC):
         pass
 
     @abstractmethod
-    def retrieve_user_appspec_by_key(self, namespace, spec_key):
+    def retrieve_user_appspec_by_key(self, username, spec_key):
         pass
 
     @abstractmethod
@@ -54,7 +54,7 @@ class AbstractStore(ABC):
         pass
 
     @abstractmethod
-    def update_user_appspec(self, namespace, updated_appspec):
+    def update_user_appspec(self, username, updated_appspec):
         pass
 
     @abstractmethod
@@ -62,7 +62,7 @@ class AbstractStore(ABC):
         pass
 
     @abstractmethod
-    def delete_user_appspec(self, namespace, spec_key):
+    def delete_user_appspec(self, username, spec_key):
         pass
 
     @abstractmethod
@@ -75,11 +75,11 @@ class AbstractStore(ABC):
         pass
 
     @abstractmethod
-    def fetch_userapps(self, namespace):
+    def fetch_userapps(self, username):
         pass
 
     @abstractmethod
-    def retrieve_userapp_by_id(self, namespace, userapp_id):
+    def retrieve_userapp_by_id(self, username, userapp_id):
         pass
 
     @abstractmethod
@@ -87,7 +87,7 @@ class AbstractStore(ABC):
         pass
 
     @abstractmethod
-    def delete_userapp(self, namespace, userapp_id):
+    def delete_userapp(self, username, userapp_id):
         pass
 
     # Vocabulary

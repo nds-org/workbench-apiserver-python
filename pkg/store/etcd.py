@@ -18,12 +18,12 @@ def get_system_appspecs_path():
     return config.ETCD_BASE_PATH + "/services"
 
 
-def get_user_apps_path(namespace):
-    return get_accounts_path() + "/" + namespace + "/stacks"
+def get_user_apps_path(username):
+    return get_accounts_path() + "/" + username + "/stacks"
 
 
-def get_user_appspecs_path(namespace):
-    return get_accounts_path() + "/" + namespace + "/services"
+def get_user_appspecs_path(username):
+    return get_accounts_path() + "/" + username + "/services"
 
 
 def get_vocabularies_path():
@@ -71,8 +71,8 @@ class EtcdStore(AbstractStore):
         except etcd.EtcdKeyNotFound as e:
             logger.error("Failed to fetch user accounts in etcd:", e)
 
-    def retrieve_user_by_namespace(self, namespace):
-        user_account_path = get_accounts_path() + "/" + namespace
+    def retrieve_user_by_username(self, username):
+        user_account_path = get_accounts_path() + "/" + username
 
         try:
             # Retrieve a user account by id
@@ -90,8 +90,8 @@ class EtcdStore(AbstractStore):
         except etcd.EtcdKeyNotFound as e:
             logger.error("Failed to update user by namespace in etcd:", e)
 
-    def delete_user(self, namespace):
-        user_account_path = get_accounts_path() + "/" + namespace
+    def delete_user(self, username):
+        user_account_path = get_accounts_path() + "/" + username
 
         try:
             # Recursively delete a user account by id
@@ -116,8 +116,8 @@ class EtcdStore(AbstractStore):
 
     def create_user_appspec(self, new_appspec):
         spec_key = new_appspec.key
-        namespace = new_appspec['creator']
-        new_appspec_path_prefix = get_user_appspecs_path(namespace) + "/" + spec_key
+        username = new_appspec['creator']
+        new_appspec_path_prefix = get_user_appspecs_path(username) + "/" + spec_key
 
         try:
             # Insert the appspec JSON
@@ -125,8 +125,8 @@ class EtcdStore(AbstractStore):
         except Exception as e:
             logger.error("Failed to create user appspec in etcd:", e)
 
-    def fetch_user_appspecs(self, namespace):
-        user_appspecs_path = get_user_appspecs_path(namespace)
+    def fetch_user_appspecs(self, username):
+        user_appspecs_path = get_user_appspecs_path(username)
 
         try:
             # Fetch a list of user appspecs
@@ -145,8 +145,8 @@ class EtcdStore(AbstractStore):
         except etcd.EtcdKeyNotFound as e:
             logger.error("Failed to fetch system appspecs in etcd:", e)
 
-    def retrieve_user_appspec_by_key(self, namespace, spec_key):
-        user_appspec_path = get_user_appspecs_path(namespace) + "/" + spec_key
+    def retrieve_user_appspec_by_key(self, username, spec_key):
+        user_appspec_path = get_user_appspecs_path(username) + "/" + spec_key
 
         try:
             # Retrieve a user appspec by key
@@ -163,9 +163,9 @@ class EtcdStore(AbstractStore):
         except etcd.EtcdKeyNotFound as e:
             logger.error("Failed to retrieve system appspec by key in etcd:", e)
 
-    def update_user_appspec(self, namespace, updated_appspec):
+    def update_user_appspec(self, username, updated_appspec):
         spec_key = updated_appspec['key']
-        user_appspec_path = get_user_appspecs_path(namespace) + "/" + spec_key
+        user_appspec_path = get_user_appspecs_path(username) + "/" + spec_key
 
         try:
             # Update a user appspec by key
@@ -175,7 +175,7 @@ class EtcdStore(AbstractStore):
 
     def update_system_appspec(self, updated_appspec):
         spec_key = updated_appspec['key']
-        system_appspec_path = get_user_appspecs_path() + "/" + spec_key
+        system_appspec_path = get_system_appspecs_path() + "/" + spec_key
 
         try:
             # Update a system appspec by key
@@ -183,8 +183,8 @@ class EtcdStore(AbstractStore):
         except etcd.EtcdKeyNotFound as e:
             logger.error("Failed to update system appspec by key in etcd:", e)
 
-    def delete_user_appspec(self, namespace, spec_key):
-        user_appspec_path = get_user_appspecs_path(namespace) + "/" + spec_key
+    def delete_user_appspec(self, username, spec_key):
+        user_appspec_path = get_user_appspecs_path(username) + "/" + spec_key
 
         try:
             # Recursively delete a user appspec by key
@@ -203,7 +203,8 @@ class EtcdStore(AbstractStore):
 
     def create_userapp(self, new_userapp):
         userapp_id = new_userapp.id
-        new_userapp_path_prefix = get_user_apps_path(namespace) + "/" + userapp_id
+        username = new_userapp['creator']
+        new_userapp_path_prefix = get_user_apps_path(username) + "/" + userapp_id
 
         try:
             # Insert the new userapp JSON
@@ -211,8 +212,8 @@ class EtcdStore(AbstractStore):
         except Exception as e:
             logger.error("Failed to create userapp in etcd:", e)
 
-    def fetch_userapps(self, namespace):
-        userapps_path = get_user_apps_path(namespace)
+    def fetch_userapps(self, username):
+        userapps_path = get_user_apps_path(username)
 
         try:
             # Fetch a list of userapps for the given user
@@ -221,8 +222,8 @@ class EtcdStore(AbstractStore):
         except etcd.EtcdKeyNotFound as e:
             logger.error("Failed to fetch userapps in etcd:", e)
 
-    def retrieve_userapp_by_id(self, namespace, userapp_id):
-        userapp_path = get_user_apps_path(namespace) + "/" + userapp_id
+    def retrieve_userapp_by_id(self, username, userapp_id):
+        userapp_path = get_user_apps_path(username) + "/" + userapp_id
 
         try:
             # Retrieve a userapp by id
@@ -240,8 +241,8 @@ class EtcdStore(AbstractStore):
         except etcd.EtcdKeyNotFound as e:
             logger.error("Failed to update userapp by key in etcd:", e)
 
-    def delete_userapp(self, userapp_id):
-        userapp_path = get_system_appspecs_path() + "/" + userapp_id
+    def delete_userapp(self, username, userapp_id):
+        userapp_path = get_user_apps_path(username) + "/" + userapp_id
 
         try:
             # Delete a user app by id
