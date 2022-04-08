@@ -1,12 +1,15 @@
 import bcrypt
+import json
 import logging
 
 from pymongo import MongoClient
+from bson import json_util, ObjectId
 
 from pkg import config
 from pkg.store.abstract import AbstractStore
 
-logger=  logging.getLogger('pkg.store.mongo')
+logger = logging.getLogger('pkg.store.mongo')
+
 
 # Hash the user's password before storing
 def hash_password(raw_password):
@@ -15,25 +18,23 @@ def hash_password(raw_password):
     return hashed.decode()
 
 
+
 USER_ACCOUNTS_COLLECTION_NAME = 'users'
 APPSPECS_COLLECTION_NAME = 'appspecs'
 USERAPPS_COLLECTION_NAME = 'userapps'
 
 VOCABULARIES_COLLECTION_NAME = 'vocabularies'
 
-def serialize_id(entity):
-    #if entity is None:
-    #    return entity
-    #entity['_id'] = str(entity['_id'])
-    return entity
-
 
 def finalize_id(entity, inserted_id):
-    if entity is None or inserted_id is None:
-        return entity
+    if entity is not None and inserted_id is not None:
+        entity['_id'] = ObjectId(inserted_id)
 
-    entity['_id'] = str(inserted_id)
-    return entity
+    return to_json(entity)
+
+
+def to_json(data):
+    return json.loads(json_util.dumps(data))
 
 
 class MongoStore(AbstractStore):
@@ -52,10 +53,14 @@ class MongoStore(AbstractStore):
         return list(self.db[USER_ACCOUNTS_COLLECTION_NAME].find())
 
     def retrieve_user_by_username(self, username):
-        return serialize_id(self.db[USER_ACCOUNTS_COLLECTION_NAME].find_one({'username': username}))
+        user = self.db[USER_ACCOUNTS_COLLECTION_NAME].find_one({'username': username})
+        return to_json(user)
 
     def update_user(self, updated_user):
-        return serialize_id(self.db[USER_ACCOUNTS_COLLECTION_NAME].update_one({'username': updated_user['username']}, updated_user))
+        username = updated_user['username']
+        updated = self.db[USER_ACCOUNTS_COLLECTION_NAME].update_one(filter={'username': username},
+                                                                 update={'$set': updated_user})
+        return updated.modified_count
 
     def delete_user(self, username):
         deleted = self.db[USER_ACCOUNTS_COLLECTION_NAME].delete_one({'username': username})
@@ -63,7 +68,6 @@ class MongoStore(AbstractStore):
 
     # AppSpecs
     def fetch_all_appspecs_for_user(self, username):
-        #return self.fetch_system_appspecs().update(self.fetch_user_appspecs(username))
         return self.fetch_system_appspecs() + self.fetch_user_appspecs(username)
 
     def create_system_appspec(self, new_appspec):
@@ -86,13 +90,15 @@ class MongoStore(AbstractStore):
         return system_specs   # self.to_spec_map(system_specs)
 
     def retrieve_user_appspec_by_key(self, username, spec_key):
-        return serialize_id(self.db[APPSPECS_COLLECTION_NAME].find_one({'key': spec_key,
-                                                           'catalog': 'user',
-                                                           'creator': username}))
+        appspec = self.db[APPSPECS_COLLECTION_NAME].find_one({'key': spec_key,
+                                                              'catalog': 'user',
+                                                              'creator': username})
+        return to_json(appspec)
 
     def retrieve_system_appspec_by_key(self, spec_key):
-        return serialize_id(self.db[APPSPECS_COLLECTION_NAME].find_one({'key': spec_key,
-                                                           'catalog': 'system'}))
+        appspec = self.db[APPSPECS_COLLECTION_NAME].find_one({'key': spec_key,
+                                                              'catalog': 'system'})
+        return to_json(appspec)
 
     def update_user_appspec(self, username, updated_appspec):
         updated_appspec['catalog'] = 'user'
@@ -101,21 +107,14 @@ class MongoStore(AbstractStore):
         updated = self.db[APPSPECS_COLLECTION_NAME].update_one(filter={'key': spec_key,
                                                              'catalog': 'user',
                                                              'creator': username}, update={'$set': updated_appspec})
-        if updated.matched_count != updated.modified_count:
-            logger.warning('Warning: matched_docs=%d, but modified_docs=%d during update of %s appspec with key=%s' %
-                           (updated.matched_count, updated.modified_count, 'user', spec_key))
-
-        return updated_appspec
+        return updated.modified_count
 
     def update_system_appspec(self, updated_appspec):
         spec_key = updated_appspec['key']
         updated = self.db[APPSPECS_COLLECTION_NAME].update_one(filter={'key': spec_key,
                                                              'catalog': 'system'}, update={'$set': updated_appspec})
 
-        if updated.matched_count != updated.modified_count:
-            logger.warning('Warning: matched_docs=%d, but modified_docs=%d during update of %s appspec with key=%s' %
-                           (updated.matched_count, updated.modified_count, 'user', spec_key))
-        return updated_appspec
+        return updated.modified_count
 
     def delete_user_appspec(self, username, spec_key):
         deleted = self.db[APPSPECS_COLLECTION_NAME].delete_one({'key': spec_key,
@@ -137,12 +136,17 @@ class MongoStore(AbstractStore):
         return list(self.db[USERAPPS_COLLECTION_NAME].find({'creator': username}))
 
     def retrieve_userapp_by_id(self, username, userapp_id):
-        return serialize_id(self.db[USERAPPS_COLLECTION_NAME].find_one({'id': userapp_id,
-                                                           'creator': username}))
+        userapp = self.db[USERAPPS_COLLECTION_NAME].find_one({'id': userapp_id,
+                                                              'creator': username})
+        return to_json(userapp)
 
     def update_userapp(self, updated_userapp):
-        return serialize_id(self.db[APPSPECS_COLLECTION_NAME].update_one({'id': updated_userapp['id'],
-                                                             'creator': updated_userapp['creator']}, updated_userapp))
+        userapp_id = updated_userapp['id']
+        username = updated_userapp['creator']
+        updated = self.db[APPSPECS_COLLECTION_NAME].update_one({'id': userapp_id,
+                                                                'creator': username}, {'$set': updated_userapp})
+
+        return updated.modified_count
 
     def delete_userapp(self, username, userapp_id):
         deleted = self.db[APPSPECS_COLLECTION_NAME].delete_one({'id': userapp_id,
@@ -151,4 +155,5 @@ class MongoStore(AbstractStore):
 
     # Vocabulary
     def fetch_vocab_by_name(self, vocab_name):
-        return serialize_id(self.db[VOCABULARIES_COLLECTION_NAME].find_one({'name': vocab_name}))
+        vocabulary = self.db[VOCABULARIES_COLLECTION_NAME].find_one({'name': vocab_name})
+        return to_json(vocabulary)

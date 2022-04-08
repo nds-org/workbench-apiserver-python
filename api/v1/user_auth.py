@@ -49,20 +49,24 @@ def post_authenticate(auth):
             return {'error': 'Invalid credentials'}, 401
 
 
-def delete_authenticate():
+def delete_authenticate(user, token_info):
     # TODO: Do we store anything server-side related to sessions?
-    existing_token = jwt.get_token()
-    expired_token = jwt.expire_token(existing_token)
+    if config.USE_KEYCLOAK:
+        keycloak.logout()
+        return 204, {'Set-Cookie': 'token=undefined'}
+    else:
+        existing_token = jwt.get_token()
+        expired_token = jwt.expire_token(existing_token)
 
-    # if so, clear it here
-    return expired_token, 200, {'Set-Cookie': 'token=%s' % expired_token}
+        # if so, clear it here
+        return 204, {'Set-Cookie': 'token=%s' % expired_token}
 
 
 def refresh_token():
     existing_token = jwt.get_token()
     token_json = jwt.safe_decode(existing_token)
-    token = {'token': jwt.encode(token_json['username'])}
-    return token, 501
+    fresh_token = jwt.encode(token_json['username'])
+    return {'token': fresh_token}, 501, {'Set-Cookie': 'token=%s' % fresh_token}
 
 
 def check_token():

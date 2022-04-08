@@ -13,6 +13,7 @@ logger = logging.getLogger('api.v1.user_apps')
 
 seed(time.time() * 1000)
 
+
 def generate_random_id():
     # generate 5 random digits to form a userapp Id
     new_id = 's'
@@ -175,16 +176,12 @@ def quickstart_stack(key):
     return '', 501
 
 
-def start_stack(stack_id):
-    token = jwt.get_token()
-    claims = jwt.safe_decode(token)
-    username = jwt.get_username_from_token(token)
-
+def start_stack(stack_id, user, token_info):
     # Lookup userapp using the id
     userapp = data_store.retrieve_userapp_by_id(stack_id)
 
     # Verify that this user is the owner
-    if userapp['creator'] != username:
+    if userapp['creator'] != user:
         return 'Only the owner may launch a userapp', 403
 
     # TODO: Create Deployment in Kubernetes
@@ -197,16 +194,12 @@ def start_stack(stack_id):
     return '', 202
 
 
-def stop_stack(stack_id):
-    token = jwt.get_token()
-    claims = jwt.safe_decode(token)
-    username = jwt.get_username_from_token(token)
-
+def stop_stack(stack_id, user, token_info):
     # Lookup userapp using the id
     userapp = data_store.retrieve_userapp_by_id(stack_id)
 
     # Verify that this user is the owner
-    if userapp['creator'] != username:
+    if userapp['creator'] != user:
         return 'Only the owner may shutdown a userapp', 403
 
     # TODO: Delete Deployment in Kubernetes
@@ -220,11 +213,11 @@ def stop_stack(stack_id):
 
 
 def get_key_from_appspec(appspec):
-    return appspec.key
+    return appspec['key']
 
 
 def get_config_from_appspec(appspec):
-    return appspec.config
+    return appspec['config']
 
 
 def get_stack_configs(services=None):

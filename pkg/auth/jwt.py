@@ -7,7 +7,7 @@ import os
 #from pkg import types
 import six
 from jose import JWTError, jwt, jws, JWSError
-from werkzeug.exceptions import Unauthorized, Forbidden
+from werkzeug.exceptions import Unauthorized, Forbidden, BadRequest
 
 from connexion.exceptions import Unauthorized
 
@@ -26,6 +26,10 @@ def expire_token(token):
 
 
 def encode(username):
+    if config.USE_KEYCLOAK:
+        logger.warning("Warning: calling encode() with keycloak is not possible")
+        return {}
+
     #user = data_store.retrieve_user_by_username(username)
 
     iat = datetime.datetime.utcnow()
@@ -36,7 +40,7 @@ def encode(username):
         "exp": exp,
         "aud": config.JWT_AUDIENCE,
         "username": username,
-        "sub": "example",
+        "sub": username,
         "iat": iat,
         "server": server
     }
@@ -52,8 +56,7 @@ def safe_decode(jwt_token):
 
 
 def decode(jwt_token):
-    if config.USE_KEYCLOAK:
-        return jwt.decode(token=jwt_token, key=config.JWT_SECRET, algorithms=[config.JWT_ALGORITHM], audience=config.JWT_AUDIENCE)
+    return jwt.decode(token=jwt_token, key=config.JWT_SECRET, algorithms=[config.JWT_ALGORITHM], audience=config.JWT_AUDIENCE)
 
 
 def get_secret(user, token_info) -> str:
@@ -111,9 +114,17 @@ def get_token_from_cookies():
 
 def get_username_from_token(token=None):
     if token is None:
+        logger.warning("No token provided.. attempting lookup")
         token = get_token()
+    if token is None:
+        logger.error("Failed to find token.. cannot decode username")
+        raise Unauthorized
     claims = safe_decode(token)
-    return claims['preferred_username'] if 'preferred_username' in claims else claims['username']
+
+    if claims is None:
+        logger.error("Failed to get username from token")
+        raise Unauthorized
+    return claims['sub'] if 'preferred_username' in claims else claims['sub']
 
 
 def get_token_from_querystring():

@@ -281,6 +281,10 @@ paths:
           description: Update saved successfully
           schema:
             $ref: '#/definitions/Service'
+        '304':
+          description: Not modified - spec has not changed
+          schema:
+            $ref: '#/definitions/Service'
         '400':
           description: Validation failed - spec is invalid
           schema:
@@ -407,6 +411,10 @@ paths:
           description: Update successful
           schema:
             $ref: '#/definitions/Account'
+        '304':
+          description: Not modified - account has not changed
+          schema:
+            $ref: '#/definitions/Account'
         '403':
           description: Forbidden - user needs permissions to edit other accounts
           schema:
@@ -515,6 +523,10 @@ paths:
       responses:
         '200':
           description: OK
+          schema:
+            $ref: '#/definitions/Stack'
+        '304':
+          description: Not modified - userapp has not changed
           schema:
             $ref: '#/definitions/Stack'
     delete:
@@ -901,6 +913,7 @@ definitions:
         enum:
           - system
           - user
+          - all
         default: user
       description:
         type: string
