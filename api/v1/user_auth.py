@@ -1,14 +1,11 @@
-from urllib.error import HTTPError
-
 import connexion
 import requests
-from jose import JWTError
-from werkzeug.exceptions import Unauthorized
+from jose import JWTError, JWSError
+from jose.exceptions import JWKError
 
-from pkg import config, kube
+from pkg import kube
 from pkg.auth import jwt, keycloak
-from pkg.datastore import data_store
-import bcrypt
+from pkg.db.datastore import data_store
 import logging
 
 logger = logging.getLogger('api.v1.user_auth')
@@ -19,6 +16,18 @@ def run():
 
     logging.info("Auth info - " + connexion.request.auth)
     return None
+
+
+SET_COOKIE_STR = 'token=%s'
+CLEAR_COOKIE_STR = 'token=undefined; Expires=0'
+
+
+def set_token_cookie(token_str):
+    return {'Set-Cookie': 'token=%s' % token_str}
+
+
+def clear_token_cookie():
+    return {'Set-Cookie', 'token=undefined; Expires=0'}
 
 
 def new_user(username, password, email, name):
@@ -37,71 +46,65 @@ def post_authenticate(auth):
     username = auth_body['username']
     password = auth_body['password']
 
-    if config.USE_KEYCLOAK:
-        try:
-            tokens = keycloak.login(username, password)
-            kube.init_user(username)
-            token = tokens['access_token']
-            #account = data_store.retrieve_user_by_username(username)
-            #if account is None:
-            #    hashed_password = bcrypt.hashpw(password.encode('ascii'), bcrypt.gensalt())
-            #    account = data_store.create_user({'username': claims['sub'],
-            #                                      'password': hashed_password,
-            #                                      'email': claims['email'],
-            #                                      'name': claims['name']})
-            #    logger.info("First login detected - created shadow account: " % account)
-            #elif not bcrypt.checkpw(password.encode('ascii'), account['password']):
-            #    hashed_password = bcrypt.hashpw(password.encode('ascii'), bcrypt.gensalt())
-            #    account['password'] = hashed_password
-            #    data_store.update_user(account)
-            #    logger.info("Password mismatch detected.. synced shadow account: " % account)
-            return {'token': token}, 200, {'Set-Cookie': 'token=%s' % token}
-        except requests.exceptions.HTTPError as e:
-            # Intentionally vague public error message, verbose log
-            logger.error('Failed keycloak login for username=%s: %s' % (username, str(e)))
-            return {'error': 'Invalid credentials'}, 401
-    else:
-        account = data_store.retrieve_user_by_username(username)
-        if account is None:
-            # Intentionally vague public error message, verbose log
-            return {'error': 'Invalid credentials'}, 401
+    try:
+        tokens = keycloak.login(username, password)
+        kube.init_user(username)
+        access_token = tokens['access_token']
 
-        if bcrypt.checkpw(password.encode('ascii'), account['password']):
-            token = jwt.encode(username)
-            kube.init_user(username)
-            return {'token': token}, 200, {'Set-Cookie': 'token=%s' % token}
-        else:
-            # Intentionally vague public error message, verbose log
-            return {'error': 'Invalid credentials'}, 401
+        token_info = jwt.safe_decode(access_token)
+        refresh_token_str = tokens['refresh_token']
+        data_store.store_refresh_token(token_info=token_info, refresh_token=refresh_token_str)
+
+        #    logger.info("Password mismatch detected.. synced shadow account: " % account)
+        return {'token': access_token}, 200, set_token_cookie(access_token)
+    except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
+        # Intentionally vague public error message, verbose log
+        logger.error('Failed keycloak login for username=%s: %s' % (username, str(e)))
+        return {'error': 'Invalid credentials'}, 401, clear_token_cookie()
 
 
 def delete_authenticate():
-    # TODO: Do we store anything server-side related to sessions?
-    if config.USE_KEYCLOAK:
-        keycloak.logout()
-        return 204, {'Set-Cookie': 'token=undefined'}
-    else:
-        existing_token = jwt.get_token()
-        expired_token = jwt.expire_token(existing_token)
+    access_token = jwt.get_token()
+    token_info = jwt.safe_decode(access_token)
+    username = jwt.get_username_from_token(access_token)
 
-        # if so, clear it here
-        return 204, {'Set-Cookie': 'token=%s' % expired_token}
+    refresh_token = data_store.retrieve_refresh_token(token_info=token_info)
+    if refresh_token is None:
+        # Nothing to delete - noop
+        return 204, clear_token_cookie()
+
+    refresh_token_str = refresh_token['token']
+
+    # Invalidate refresh token
+    keycloak.logout(access_token=access_token, refresh_token=refresh_token_str)
+    data_store.clear_refresh_token(token_info=token_info)
+
+    # Invalidate any cookies
+    return 204, clear_token_cookie()
 
 
-def refresh_token():
-    existing_token = jwt.get_token()
-    token_json = jwt.safe_decode(existing_token)
-    fresh_token = jwt.encode(token_json['username'])
-    return {'token': fresh_token}, 501, {'Set-Cookie': 'token=%s' % fresh_token}
+def refresh_token(user, token_info):
+    # Check for existing refresh token
+    refresh_token = data_store.retrieve_refresh_token(token_info=token_info)
+    if refresh_token is None:
+        return {'error': 'Token has expired'}, 401, clear_token_cookie()
+
+    refresh_token_str = refresh_token['token']
+
+    tokens = keycloak.refresh(token_info, refresh_token_str)
+    data_store.store_refresh_token(token_info=token_info, refresh_token=tokens['refresh_token'])
+
+    # Return new access token
+    access_token = tokens['access_tokens']
+    return {'token': access_token}, 200, set_token_cookie(access_token)
 
 
-def check_token():
-    existing_token = jwt.get_token()
+def check_token(user, token_info):
     try:
-        jwt.decode(existing_token)
-        return 'Token is valid', 200
-    except JWTError as e:
-        return 'Invalid token', 401
+        jwt.decode(token_info)
+        return {'status': 'Token is valid'}, 200
+    except (JWTError, JWSError, JWKError) as e:
+        return {'error': 'Invalid token'}, 401
 
 
 def validate_o_auth_token():

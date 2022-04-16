@@ -2,9 +2,9 @@ import bcrypt
 import connexion
 import logging
 
-from pkg import mongo, kube
+from pkg.db import mongo
 from pkg.auth import jwt
-from pkg.datastore import data_store
+from pkg.db.datastore import data_store
 
 
 logger = logging.getLogger('api.v1.user_accounts')

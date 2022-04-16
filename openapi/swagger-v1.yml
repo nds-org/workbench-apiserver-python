@@ -20,19 +20,17 @@ securityDefinitions:
     name: Authorization
     in: header
   Header:
-    # x-apikeyInfoFunc: 'pkg.auth.keycloak.apikey_auth'
     x-apikeyInfoFunc: 'pkg.auth.jwt.validate_apikey_header'
     type: apiKey
     name: X-API-TOKEN
     in: header
   Cookie:
-    # x-apikeyInfoFunc: 'pkg.auth.keycloak.cookie_token_auth'
     x-apikeyInfoFunc: 'pkg.auth.jwt.validate_auth_cookie'
     type: apiKey
     name: Cookie
     in: header
   OAuth2:
-    authorizationUrl: https://example.com/oauth2/dialog
+    authorizationUrl: http://localhost:8080/realms/workbench-dev/protocol/openid-connect/auth
     # the token info URL is hardcoded for our mock_tokeninfo.py script
     # you can also pass it as an environment variable TOKENINFO_URL
     #x-tokenInfoUrl: http://localhost:7979/tokeninfo
@@ -129,8 +127,6 @@ paths:
       responses:
         '204':
           description: No Content (logout successful)
-        '401':
-          description: Unauthorized - missing or invalid login token
   /refresh_token:
     get:
       security:

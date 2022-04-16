@@ -1,12 +1,10 @@
-import connexion
 import logging
 
-from jose import JWSError
-
 from pkg.auth import jwt
-from pkg.datastore import data_store
+from pkg.db.datastore import data_store
+from pkg.db.mongo import MongoStore
 
-from pkg import mongo, types
+from pkg.openapi import types
 
 logger = logging.getLogger('api.v1.app_specs')
 
@@ -53,8 +51,8 @@ def create_service(service, user, token_info):
             else:
                 return {'error': 'Spec key already exists: %s' % service_key}, 409
     elif catalog == 'system':
-        service_key = service['key']
         jwt.validate_scopes(['workbench-admin'], token_info)
+        service_key = service['key']
         if is_service_key_unique(user, service_key):
             new_spec = data_store.create_system_appspec(service)
             return new_spec, 201
@@ -73,16 +71,16 @@ def list_services(catalog='all'):
         # Attempt user lookup, if possible
         if catalog == 'user':
             services = data_store.fetch_user_appspecs(username)
-            return mongo.parse_json(services), 200
+            return services, 200
         else:  # catalog == all or anything else
             services = data_store.fetch_all_appspecs_for_user(username)
-            return mongo.parse_json(services), 200
+            return services, 200
     except Exception as e:
         logger.debug('Skipping user catalog check: %s' % str(e))
 
     if catalog == 'all' or catalog == 'system':
         services = data_store.fetch_system_appspecs()
-        return mongo.parse_json(services), 200
+        return services, 200
     elif catalog == 'user':
         return {'error': 'Must login to request user catalog'}, 401
 
@@ -95,14 +93,14 @@ def get_service_by_id(service_id):
         # User spec not found, check system catalog
         appspec = data_store.retrieve_user_appspec_by_key(username, service_id)
         if appspec is not None:
-            return mongo.parse_json(appspec), 200
+            return appspec, 200
     except Exception as e:
         logger.debug('Skipping user catalog check: %s' % str(e))
 
     # No token (or appspec not found), but we can still check system catalog
     appspec = data_store.retrieve_system_appspec_by_key(service_id)
     if appspec is not None:
-        return mongo.parse_json(appspec), 200
+        return appspec, 200
     else:
         return {'error': 'Spec key=%s not found' % service_id}, 404
 

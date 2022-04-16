@@ -1,85 +1,39 @@
 import connexion
 import logging
-import datetime
-import os
 
-#from jsonschema import validate
-#from pkg import types
 import six
-from jose import JWTError, jwt, jws, JWSError
-from jose.exceptions import JWKError
-from werkzeug.exceptions import Unauthorized, Forbidden, BadRequest
+from pkg.auth import keycloak
+from jose import jwt
+from jose.exceptions import JWTError, JWSError, JWKError, ExpiredSignatureError
+from werkzeug.exceptions import Forbidden
 
 from connexion.exceptions import Unauthorized
 
 from pkg import config
-from pkg.datastore import data_store
+from pkg.db.datastore import data_store
 
 logger = logging.getLogger('pkg.auth.jwt')
-
-ADMIN_USERS = config.ADMIN_USERS.split(",")
-
-
-def expire_token(token):
-    payload = safe_decode(token)
-    payload['exp'] = datetime.datetime.utcnow()   # expire token now
-    return jwt.encode(payload, config.JWT_SECRET, config.JWT_ALGORITHM)
-
-
-def encode(username):
-    if config.USE_KEYCLOAK:
-        logger.warning("Warning: calling encode() with keycloak is not possible")
-        return {}
-
-    #user = data_store.retrieve_user_by_username(username)
-
-    iat = datetime.datetime.utcnow()
-    exp = iat + config.JWT_TIMEOUT
-    server = os.uname()[1]
-
-    payload = {
-        "exp": exp,
-        "aud": config.JWT_AUDIENCE,
-        "username": username,
-        "sub": username,
-        "iat": iat,
-        "server": server
-    }
-
-    return jwt.encode(payload, config.JWT_SECRET, config.JWT_ALGORITHM)
 
 
 def safe_decode(jwt_token):
     try:
         return decode(jwt_token)
-    except JWKError as e:
-        logger.error('Failed to decode JWK: ', e)
-    except JWSError as e:
-        logger.error('Failed to decode JWS: ', e)
-    except JWTError as e:
-        logger.error('Failed to decode JWT: ', e)
+    except ExpiredSignatureError as e:
+        logger.warning('Token is expired - attempting refresh: %s' % e)
+    except (JWTError, JWSError, JWKError) as e:
+        logger.error('Failed to decode JWT: %s' % e)
 
 
 def decode(jwt_token):
-    if config.USE_KEYCLOAK:
-        logger.info(">>>>> Decoding using Keycloak Realm public key: %s" % config.KC_PUBLICKEY)
-        return jwt.decode(token=jwt_token, key=config.KC_PUBLICKEY, algorithms=["RS256"], audience=config.JWT_AUDIENCE)
-    return jwt.decode(token=jwt_token, key=config.JWT_SECRET, algorithms=[config.JWT_ALGORITHM], audience=config.JWT_AUDIENCE)
+    return jwt.decode(token=jwt_token, key=config.KC_PUBLICKEY, algorithms=["RS256"], audience=config.KC_AUDIENCE)
 
 
-def get_secret(user, token_info) -> str:
-    return '''
-    You are user_id {user} and the secret is 'wbevuec'.
-    Decoded token claims: {token_info}.
-    '''.format(user=user, token_info=token_info)
+def decode_expired(jwt_token):
+    return jwt.decode(token=jwt_token, key=config.KC_PUBLICKEY, algorithms=["RS256"], audience=config.KC_AUDIENCE, options={"verify_exp": False})
 
 
-def verify_token(token):
-    try:
-        jws.verify(token, config.JWT_SECRET, config.JWT_ALGORITHM)
-        return True, 200
-    except JWSError:
-        return JWSError, 401
+def decode_refresh_token(jwt_token):
+    return jwt.decode(token=jwt_token, key=config.KC_PUBLICKEY, algorithms=["HS256"], audience=config.KC_REALM_URL, options={"verify_signature": False})
 
 
 # Use this method to consistently check our default location for an auth token
@@ -102,22 +56,20 @@ def get_token_from_auth_header():
     if 'Authorization' in connexion.request.headers:
         bearer_str = connexion.request.headers.get('Authorization')
         # If the word "bearer" is included, return everything after that literal
-        if bearer_str.lower().startswith('bearer '):
-            return bearer_str.split(' ')[-1]
-        return bearer_str
+        return bearer_str.split(' ')[-1] if bearer_str.lower().startswith('bearer ') else bearer_str
     return None
 
 
 def get_token_from_headers():
-    if 'X-API-TOKEN' in connexion.request.headers:
-        return connexion.request.headers.get('X-API-TOKEN')
-    return None
+    return connexion.request.headers.get('X-API-TOKEN') if 'X-API-TOKEN' in connexion.request.headers else None
 
 
 def get_token_from_cookies():
-    if 'token' in connexion.request.cookies:
-        return connexion.request.cookies.get('token')
-    return None
+    return connexion.request.cookies.get('token') if 'token' in connexion.request.cookies else None
+
+
+def get_token_from_querystring():
+    return connexion.request.args.get('token') if 'token' in connexion.request.args else None
 
 
 def get_username_from_token(token=None):
@@ -135,26 +87,11 @@ def get_username_from_token(token=None):
     return claims['sub'] if 'preferred_username' in claims else claims['sub']
 
 
-def get_token_from_querystring():
-    # querystring = querystring[1:] if querystring.startswith('?') else querystring
-
-    if 'token' in connexion.request.args:
-        return connexion.request.args.get('token')
-    return None
-
-
 def validate_apikey_querystring(apikey, required_scopes):
-    if not apikey:
-        #raise Unauthorized
-        return None
-
     return validate_token(apikey, required_scopes)
 
 
 def validate_auth_header(apikey, required_scopes):
-    if not apikey:
-        return None   # Missing credentials / token
-
     # format: bearer <jwt>
     # we only want the jwt, strip out the literal "bearer"
     token = apikey.split(" ")[-1]
@@ -163,10 +100,6 @@ def validate_auth_header(apikey, required_scopes):
 
 
 def validate_apikey_header(apikey, required_scopes):
-    if 'X-API-TOKEN' not in connexion.request.headers:
-        #raise Unauthorized
-        return None   # Missing credentials / token
-
     #token = get_token_from_cookies()
     return validate_token(apikey, required_scopes)
 
@@ -180,6 +113,22 @@ def validate_auth_cookie(cookies, required_scopes):
     return validate_token(token, required_scopes)
 
 
+# FIXME: Currently unused
+def validate_refresh_token(token, required_scopes):
+    try:
+        claims = decode_refresh_token(token)
+
+        if required_scopes is not None:
+            validate_scopes(required_scopes, claims)
+
+        return claims
+    except ExpiredSignatureError as e:
+        logger.warning('Failed to refresh - refresh token is expired: %s' % e)
+    except (JWTError, JWSError, JWKError) as e:
+        logger.error('Failed to refresh access token: %s' % e)
+    return None
+
+
 def validate_token(token, required_scopes):
     try:
         claims = decode(str(token))
@@ -189,32 +138,43 @@ def validate_token(token, required_scopes):
             validate_scopes(required_scopes, claims)
 
         return claims   # Credentials fine, access granted
-    except JWTError as e:
+    except ExpiredSignatureError as e:
+        token_info = decode_expired(token)
+        logger.warning('Token has expired - attempting refresh: %s' % token_info['session_state'])
+        stored_token = data_store.retrieve_refresh_token(token_info=token_info)
+        refresh_token_str = stored_token['token']
+        tokens = keycloak.refresh(token_info=token_info, refresh_token=refresh_token_str)
+        new_access_token = tokens['access_token']
+        new_token_info = decode(new_access_token)
+        new_refr_token = tokens['refresh_token']
+
+        # Store new refresh token
+        data_store.store_refresh_token(token_info=new_token_info, refresh_token=new_refr_token)
+
+        logger.info('Token refreshed - session renewed: %s' % new_token_info['session_state'])
+        # Return decoded new access token
+        return decode(str(new_access_token))
+    except (JWTError, JWSError, JWKError) as e:
         logger.error('Failed to decode JWT: ', e)
         six.raise_from(Unauthorized, e)
         #raise Unauthorized
         return None   # Bad credentials / bad format
 
 
-def validate_keycloak_role(required_role, roles):
+def validate_role(required_role, roles):
     logger.info("Validating Keycloak required_role=%s, roles=%s" % (required_role, roles))
     if required_role not in roles:
         raise Forbidden
 
 
 def validate_scopes(required_scopes, claims):
-    if config.USE_KEYCLOAK:
-        roles = claims['realm_access']['roles']
-        if required_scopes is not None and 'workbench-admin' in required_scopes:
-            validate_keycloak_role('workbench-admin', roles)
-        if required_scopes is not None and 'workbench-accounts' in required_scopes:
-            validate_keycloak_role('workbench-accounts', roles)
-        if required_scopes is not None and 'workbench-catalog' in required_scopes:
-            validate_keycloak_role('workbench-catalog', roles)
-        if required_scopes is not None and 'workbench-dev' in required_scopes:
-            validate_keycloak_role('workbench-dev', roles)
-    else:
-        username = claims['username']
-        if username not in ADMIN_USERS:
-            raise Forbidden
+    roles = claims['realm_access']['roles']
+    if required_scopes is not None and 'workbench-admin' in required_scopes:
+        validate_role('workbench-admin', roles)
+    if required_scopes is not None and 'workbench-accounts' in required_scopes:
+        validate_role('workbench-accounts', roles)
+    if required_scopes is not None and 'workbench-catalog' in required_scopes:
+        validate_role('workbench-catalog', roles)
+    if required_scopes is not None and 'workbench-dev' in required_scopes:
+        validate_role('workbench-dev', roles)
 

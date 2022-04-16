@@ -3,7 +3,7 @@ from builtins import range
 
 from pkg import kube
 from pkg.auth import jwt
-from pkg.datastore import data_store
+from pkg.db.datastore import data_store
 
 import time
 from random import seed

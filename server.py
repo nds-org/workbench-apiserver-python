@@ -4,7 +4,7 @@ import os
 import connexion
 from pkg import config, kube
 
-from pkg.resolver import OperationResolver, DebugRestyResolver
+from pkg.openapi.resolver import OperationResolver
 
 logger = logging.getLogger("server")
 

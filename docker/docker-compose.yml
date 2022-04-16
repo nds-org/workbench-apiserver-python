@@ -2,6 +2,11 @@
 version: "3.9"
 
 services:
+  # NOTE: This application requires an external Kubernetes cluster
+  # See services.api.volumes below:
+  # When running within a cluster, we have a token and crt file for auth
+  # Outside of a cluster, we can use the kubeconfig
+
   mongo:
     image: "mongo:5.0.3"
     env_file:
