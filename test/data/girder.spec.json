@@ -1,6 +1,7 @@
 {
   "key": "girder",
   "label": "Girder",
+  "catalog": "system",
   "description": "Web-based data management platform.",
   "logo": "https://github.com/nds-org/ndslabs/raw/develop/gui/asset/png/logos/girder-logo.png",
   "image": {

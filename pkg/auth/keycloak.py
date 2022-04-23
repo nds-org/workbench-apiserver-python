@@ -14,10 +14,10 @@ def login(username, password):
             'password': password,
 
             'audience': config.KC_AUDIENCE,
-            'client_id': config.KC_CLIENT_ID,
+            'client_id': config.KEYCLOAK_CLIENT_ID,
             'grant_type': config.KC_GRANT_TYPE,
             'scope': config.KC_SCOPE,
-            'client_secret': config.KC_CLIENT_SECRET,
+            'client_secret': config.KEYCLOAK_CLIENT_SECRET,
         })
         resp.raise_for_status()
         tokens = resp.json()
@@ -40,8 +40,8 @@ def refresh(token_info, refresh_token):
             # Refresh uses same Token URL as login, different parameter
             resp = requests.post(url=config.KC_TOKEN_URL,
                                  headers={'Content-Type': 'application/x-www-form-urlencoded'},
-                                 data={'client_id': config.KC_CLIENT_ID,
-                                       'client_secret': config.KC_CLIENT_SECRET,
+                                 data={'client_id': config.KEYCLOAK_CLIENT_ID,
+                                       'client_secret': config.KEYCLOAK_CLIENT_SECRET,
                                        'grant_type': 'refresh_token',
                                        'refresh_token': refresh_token})
             resp.raise_for_status()
@@ -64,8 +64,8 @@ def logout(access_token, refresh_token):
     if subject is not None:
         try:
             resp = requests.post(config.KC_LOGOUT_URL, {
-                'client_id': config.KC_CLIENT_ID,
-                'client_secret': config.KC_CLIENT_SECRET,
+                'client_id': config.KEYCLOAK_CLIENT_ID,
+                'client_secret': config.KEYCLOAK_CLIENT_SECRET,
                 'refresh_token': refresh_token
             })
             resp.raise_for_status()

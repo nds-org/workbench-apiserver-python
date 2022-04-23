@@ -9,7 +9,7 @@ from pkg.openapi.resolver import OperationResolver
 logger = logging.getLogger("server")
 
 if __name__ == '__main__':
-    debug = os.getenv('DEBUG', True)
+    debug = config.DEBUG
 
     if debug:
         logging.basicConfig(

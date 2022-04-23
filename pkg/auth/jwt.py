@@ -14,6 +14,29 @@ from pkg.db.datastore import data_store
 
 logger = logging.getLogger('pkg.auth.jwt')
 
+SET_COOKIE_STR = 'token=%s; Path=/'
+CLEAR_COOKIE_STR = 'token=undefined; Path=/; Expires=0'
+access_tokens = {}
+
+
+def get_access_token(username):
+    return access_tokens.get(username, None)
+
+
+def update_access_token(username, access_token):
+    access_tokens[username] = access_token
+
+
+def get_token_cookie(username, access_token_str=None):
+    if access_token_str is None:
+        access_token_str = get_access_token(username)
+    return {'Set-Cookie': SET_COOKIE_STR % access_token_str}
+
+
+def clear_token_cookie(username):
+    update_access_token(username, None)
+    return {'Set-Cookie', CLEAR_COOKIE_STR}
+
 
 def safe_decode(jwt_token):
     try:
@@ -52,24 +75,32 @@ def get_token():
             return token
 
 
-def get_token_from_auth_header():
-    if 'Authorization' in connexion.request.headers:
-        bearer_str = connexion.request.headers.get('Authorization')
+def get_token_from_auth_header(headers=None):
+    if headers is None:
+        headers = connexion.request.headers
+    if 'Authorization' in headers:
+        bearer_str = headers.get('Authorization')
         # If the word "bearer" is included, return everything after that literal
         return bearer_str.split(' ')[-1] if bearer_str.lower().startswith('bearer ') else bearer_str
     return None
 
 
-def get_token_from_headers():
-    return connexion.request.headers.get('X-API-TOKEN') if 'X-API-TOKEN' in connexion.request.headers else None
+def get_token_from_headers(headers=None):
+    if headers is None:
+        headers = connexion.request.headers
+    return headers.get('X-API-TOKEN') if 'X-API-TOKEN' in headers else None
 
 
-def get_token_from_cookies():
-    return connexion.request.cookies.get('token') if 'token' in connexion.request.cookies else None
+def get_token_from_cookies(cookies=None):
+    if cookies is None:
+        cookies = connexion.request.cookies
+    return cookies.get('token') if 'token' in cookies else None
 
 
-def get_token_from_querystring():
-    return connexion.request.args.get('token') if 'token' in connexion.request.args else None
+def get_token_from_querystring(args=None):
+    if args is None:
+        args = connexion.request.args
+    return args.get('token') if 'token' in args else None
 
 
 def get_username_from_token(token=None):
@@ -88,10 +119,12 @@ def get_username_from_token(token=None):
 
 
 def validate_apikey_querystring(apikey, required_scopes):
+    logger.info("Checking for auth (querystring): %s" % apikey)
     return validate_token(apikey, required_scopes)
 
 
 def validate_auth_header(apikey, required_scopes):
+    logger.info("Checking for auth (header): %s" % apikey)
     # format: bearer <jwt>
     # we only want the jwt, strip out the literal "bearer"
     token = apikey.split(" ")[-1]
@@ -100,11 +133,13 @@ def validate_auth_header(apikey, required_scopes):
 
 
 def validate_apikey_header(apikey, required_scopes):
+    logger.info("Checking for auth (apikey): %s" % apikey)
     #token = get_token_from_cookies()
     return validate_token(apikey, required_scopes)
 
 
 def validate_auth_cookie(cookies, required_scopes):
+    logger.info("Checking for auth (cookie): %s" % cookies)
     if 'token' not in cookies:
         #raise Unauthorized
         return None   # Missing credentials / token
@@ -131,6 +166,7 @@ def validate_refresh_token(token, required_scopes):
 
 def validate_token(token, required_scopes):
     try:
+        #logger.info("Checking for auth: " + token)
         claims = decode(str(token))
 
         # TODO: Check authorization
@@ -144,12 +180,17 @@ def validate_token(token, required_scopes):
         stored_token = data_store.retrieve_refresh_token(token_info=token_info)
         refresh_token_str = stored_token['token']
         tokens = keycloak.refresh(token_info=token_info, refresh_token=refresh_token_str)
+
         new_access_token = tokens['access_token']
         new_token_info = decode(new_access_token)
         new_refr_token = tokens['refresh_token']
 
+        # XXX: Replace new access token in cookie
+        # connexion.request.cookies.add('token', new_access_token)
+
         # Store new refresh token
         data_store.store_refresh_token(token_info=new_token_info, refresh_token=new_refr_token)
+        update_access_token(username=new_token_info['sub'], access_token=new_access_token)
 
         logger.info('Token refreshed - session renewed: %s' % new_token_info['session_state'])
         # Return decoded new access token
@@ -177,4 +218,11 @@ def validate_scopes(required_scopes, claims):
         validate_role('workbench-catalog', roles)
     if required_scopes is not None and 'workbench-dev' in required_scopes:
         validate_role('workbench-dev', roles)
+
+
+def tokeninfo(token):
+    logger.info("Decoding token: %s" % token)
+    return safe_decode(token)
+
+
 

@@ -33,7 +33,7 @@ securityDefinitions:
     authorizationUrl: http://localhost:8080/realms/workbench-dev/protocol/openid-connect/auth
     # the token info URL is hardcoded for our mock_tokeninfo.py script
     # you can also pass it as an environment variable TOKENINFO_URL
-    #x-tokenInfoUrl: http://localhost:7979/tokeninfo
+    #x-tokenInfoFunc: pkg.auth.jwt.tokeninfo
     type: oauth2
     flow: implicit
     scopes:

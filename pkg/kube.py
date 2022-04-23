@@ -7,6 +7,9 @@ from requests import HTTPError
 
 from pkg import config
 from pkg.config import KUBE_WORKBENCH_NAMESPACE, KUBE_WORKBENCH_RESOURCE_PREFIX
+from pkg.exceptions import AppSpecNotFoundError
+
+
 
 CRD_GROUP_NAME = "ndslabs.org"
 CRD_VERSION_V1 = "v1"
@@ -83,7 +86,7 @@ def initialize():
         logger.debug("Starting in multi-namespace mode")
 
 
-# Create necessary resource for a new user
+# Create necessary resources for a new user
 def init_user(username):
     namespace = get_resource_namespace(username)
     # resource_name = get_resource_name(username)
@@ -105,26 +108,37 @@ def init_user(username):
     # create_resource_quota(namespace=namespace, quota_name=username, hard_quotas=DEFAULT_DEV_RESOURCE_QUOTA)
     # create_network_policy(namespace=username, policy_name=username)
 
+
 # Creates the Kubernetes resources related to a userapp
 def create_userapp(username, userapp, spec_map):
     namespace = get_resource_namespace(username)
     containers = []
     ingress_hosts = {}
     userapp_id = userapp['id']
+    userapp_key = userapp['key']
+
+    labels = {
+        'manager': 'workbench',
+        'user': username,
+        'workbench-app': userapp_id
+    }
+
+    logger.info("Map of specs: %s" % spec_map)
     for stack_service in userapp['services']:
         service_key = stack_service['service']
-        app_spec = spec_map[service_key]
+        app_spec = spec_map.get(service_key, None)
         if app_spec is None:
             logger.error("Failed to find app_spec: %s" % service_key)
-            continue
+            raise AppSpecNotFoundError("Failed to find app_spec: %s" % service_key)
         stack_service_id = get_stack_service_id(userapp_id, service_key)
-        resource_name = get_resource_name(stack_service_id)
-        service_ports = app_spec['ports'] if 'ports' in app_spec else None
+        resource_name = get_resource_name(stack_service_id, service_key)
+        service_ports = app_spec['ports'] if 'ports' in app_spec else []
         ingress_hosts[stack_service_id] = service_ports
 
         # Create one pod container per-stack service
         containers.append({
             'name': stack_service_id,
+            'resourceLimits': stack_service['resourceLimits'] if 'resourceLimits' in stack_service else app_spec['resourceLimits'] if 'resourceLimits' in app_spec else {},
             'command': stack_service['command'] if 'command' in stack_service else None,
             'image': stack_service['image'] if 'image' in stack_service else app_spec['image'],
             'configmap': "%s-config" % resource_name,  # not currently used
@@ -135,18 +149,19 @@ def create_userapp(username, userapp, spec_map):
 
         # Create one Kubernetes service container per-stack service
         create_service(service_name=resource_name,
-                       namespace=namespace,
+                       namespace=namespace, labels=labels,
                        service_ports=service_ports)
 
     # Create one ingress per-stack
-    create_ingress(ingress_name=get_resource_name(userapp_id),
-                   namespace=namespace,
+    create_ingress(ingress_name=get_resource_name(userapp_id, userapp_key),
+                   namespace=namespace, labels=labels,
                    ingress_hosts=ingress_hosts)
 
     # Create one deployment per-stack (start with 0 replicas, aka Stopped)
-    create_deployment(deployment_name=get_resource_name(userapp_id),
+    create_deployment(deployment_name=get_resource_name(userapp_id, userapp_key),
                       namespace=namespace,
                       replicas=0,
+                      labels=labels,
                       containers=containers)
 
 
@@ -155,6 +170,7 @@ def destroy_userapp(username, userapp):
     appId = userapp['id']
     namespace = get_resource_namespace(username)
     delete_deployment(appId, namespace=namespace)
+    # TODO: delete_configmap (currently unused)
     delete_ingress(appId, namespace=namespace)
     for stack_service in userapp['services']:
         delete_service(stack_service['id'], namespace=namespace)
@@ -309,44 +325,34 @@ def create_persistent_volume_claim(pvc_name, **kwargs):
     return pvc
 
 
+def get_image_string(container_image):
+    # Required values
+    name = container_image.get('name', '')
+
+    # Optional values
+    repo = container_image.get('repo', None)
+    tags = container_image.get('tags', [])
+    tag = tags[0] if len(tags) > 0 else 'latest'
+    return '%s/%s:%s' % (repo, name, tag) if repo is not None else '%s:%s' % (name, tag)
+
+
 # Containers:
 #   "busybox" -> { name, configmap, image, lifecycle, ports, command }
-def create_deployment(deployment_name, containers, **kwargs):
+def create_deployment(deployment_name, containers, labels, **kwargs):
     appv1 = client.AppsV1Api()
 
     # TODO: Validation
+    deployment_labels = labels
     deployment_namespace = kwargs['namespace'] if 'namespace' in kwargs else 'default'
-    deployment_labels = kwargs['labels'] if 'labels' in kwargs else {}
     deployment_annotations = kwargs['annotations'] if 'annotations' in kwargs else {}
 
     deployment_replicas = kwargs['replicas'] if 'replicas' in kwargs else 0
 
     podspec_annotations = kwargs['pod_annotations'] if 'pod_annotations' in kwargs else {}
 
-    service_account_name = kwargs['service_account'] if 'service_account' in kwargs else 'workbench'
+    service_account_name = kwargs['service_account'] if 'service_account' in kwargs else None
 
-    # TODO: Abstract to parameter array
-    #configmap_name = "%s-config" % deployment_name
-    #container_name = 'workbench-container'
-    #container_image = 'k8s.gcr.io/busybox'
-    #container_command = ["/bin/sh", "-c", "env"]
-    #container_poststart_command = ["/bin/sh", "-c", "echo Hello from the postStart handler > /usr/share/message/postStart"]
-    #container_prestop_command = ["/bin/sh", "-c", "echo Hello from the preStop handler > /usr/share/message/preStop"]
-    #container_ports = [80, 443]
-
-    #client.V1Lifecycle(
-    #    post_start=client.V1Handler(
-    #        _exec=client.V1ExecAction(
-    #            command=container_poststart_command
-    #        )
-    #    ),
-    #    pre_stop=client.V1Handler(
-    #        _exec=client.V1ExecAction(
-    #            command=container_prestop_command
-    #        )
-    #    ),
-    #)
-
+    # Build a podspec from given containers and other parameters
     podspec = client.V1PodSpec(
         service_account_name=service_account_name,
         containers=[
@@ -362,18 +368,19 @@ def create_deployment(deployment_name, containers, **kwargs):
                 ],
                 # TODO: container.lifecycle?
                 lifecycle=container['lifecycle'] if 'lifecycle' in container else None,
-                image=container['image'],
+                image=get_image_string(container['image']),
                 ports=[
                     client.V1ContainerPort(
-                        name=port,
-                        container_port=container['ports'][port]
+                        name='%s%s' % (port['protocol'] if 'protocol' in port else 'tcp', str(port['port'])),
+                        container_port=port['port'],
+                        protocol='TCP'  # port['protocol'].upper() if 'protocol' in port and port['protocol'] != 'http' else
                     ) for port in container['ports']
                 ]
             ) for container in containers
         ])
 
     try:
-        deployment = appv1.create_namespaced_deployment(namespace=deployment_namespace, body=client.V1Deployment(
+        body = client.V1Deployment(
             api_version='apps/v1',
             kind='Deployment',
             metadata=client.V1ObjectMeta(
@@ -384,9 +391,7 @@ def create_deployment(deployment_name, containers, **kwargs):
             ),
             spec=client.V1DeploymentSpec(
                 replicas=deployment_replicas,
-                selector=client.V1LabelSelector(
-                    match_labels=deployment_labels
-                ),
+                selector={"matchLabels": deployment_labels},
                 template=client.V1PodTemplateSpec(
                     metadata=client.V1ObjectMeta(
                         name=deployment_name,
@@ -397,8 +402,11 @@ def create_deployment(deployment_name, containers, **kwargs):
                     spec=podspec
                 )
             )
-        ))
-        logger.debug("Created deployment resource: " + str(deployment))
+        )
+
+        logger.info("Creating deployment resource: %s" % str(body))
+        deployment = appv1.create_namespaced_deployment(namespace=deployment_namespace, body=body)
+        logger.debug("Created deployment resource: %s" % str(deployment))
         return deployment
     except (ApiException, HTTPError) as exc:
         if isinstance(exc, ApiException) and exc.status == 409:
@@ -410,9 +418,13 @@ def create_deployment(deployment_name, containers, **kwargs):
 
 def delete_deployment(name, namespace):
     appv1 = client.AppsV1Api()
-    appv1.delete_namespaced_deployment(name=name, namespace=namespace)
-    logger.debug("Deleted deployment resource: %s/%s" % (namespace, name))
-    return
+    try:
+        appv1.delete_namespaced_deployment(name=name, namespace=namespace)
+        logger.debug("Deleted deployment resource: %s/%s" % (namespace, name))
+    except (ApiException, HTTPError) as exc:
+        if not isinstance(exc, ApiException) or exc.status != 404:
+            logger.error("Error deleting deployment resource: %s" % str(exc))
+            raise exc
 
 
 # Expected format:
@@ -420,22 +432,14 @@ def delete_deployment(name, namespace):
 #        'http': 80,
 #        'https': 443
 #    }
-def create_service(service_name, service_ports, **kwargs):
+def create_service(service_name, service_ports, labels, **kwargs):
     v1 = client.CoreV1Api()
 
     # TODO: Validation
+    service_labels = labels
     service_namespace = kwargs['namespace'] if 'namespace' in kwargs else 'default'
-    service_labels = kwargs['labels'] if 'labels' in kwargs else {}
     service_annotations = kwargs['annotations'] if 'annotations' in kwargs else {}
-    print(service_ports)
-    built_ports = []
-    for port in service_ports:
-        print(str(json.dumps(port)))
-        built_ports.append(client.V1ServicePort(
-                    port=port['port'],
-                    protocol=port['protocol']
-                ))
-    print(built_ports)
+
     try:
         service = v1.create_namespaced_service(namespace=service_namespace, body=client.V1Service(
             api_version='v1',
@@ -448,7 +452,13 @@ def create_service(service_name, service_ports, **kwargs):
             ),
             spec=client.V1ServiceSpec(
                 selector=service_labels,
-                ports=built_ports
+                ports=[
+                    client.V1ServicePort(
+                        name=port['name'] if 'name' in port else None,
+                        port=int(port['port']),
+                        protocol='TCP'  # port['protocol'].upper() if 'protocol' in port and port['protocol'] != 'http' else
+                    ) for port in service_ports
+                ]
             )
         ))
         logger.debug("Created service resource: " + str(service))
@@ -458,27 +468,29 @@ def create_service(service_name, service_ports, **kwargs):
         if isinstance(exc, ApiException) and exc.status == 409:
             return None
         else:
-            logger.error("Error creating service resource: %s" % str(e))
+            logger.error("Error creating service resource: %s" % str(exc))
             raise exc
 
 
 def delete_service(name, namespace):
     v1 = client.CoreV1Api()
+    try:
+        v1.delete_namespaced_service(name=name, namespace=namespace)
 
-    v1.delete_namespaced_service(name=name, namespace=namespace)
+        logger.debug("Deleted service resource: %s/%s" % (namespace, name))
+    except (ApiException, HTTPError) as exc:
+        if not isinstance(exc, ApiException) or exc.status != 404:
+            logger.error("Error deleting service resource: %s" % str(exc))
+            raise exc
 
-    logger.debug("Deleted service resource: %s/%s" % (namespace, name))
 
-    return
-
-
-def create_ingress(ingress_name, ingress_hosts, **kwargs):
+def create_ingress(ingress_name, ingress_hosts, labels, **kwargs):
     networkingv1 = client.NetworkingV1Api()
     print("Creating ingress resource:")
 
     # TODO: Validation
+    ingress_labels = labels
     ingress_namespace = kwargs['namespace'] if 'namespace' in kwargs else 'default'
-    ingress_labels = kwargs['labels'] if 'labels' in kwargs else {}
     ingress_annotations = kwargs['annotations'] if 'annotations' in kwargs else {}
 
     try:
@@ -495,20 +507,18 @@ def create_ingress(ingress_name, ingress_hosts, **kwargs):
                 client.V1IngressRule(
                     host='%s.%s' % (stack_service_id, config.DOMAIN),
                     http=client.V1HTTPIngressRuleValue(
-                        paths=[
-                            client.V1HTTPIngressPath(
-                                path_type='ImplementationSpecific',
-                                path='/',  # Since we use host-based routing
-                                backend=client.V1IngressBackend(
-                                    service=client.V1IngressServiceBackend(
-                                        name=stack_service_id,
-                                        port=client.V1ServiceBackendPort(
-                                            number=ingress_hosts[stack_service_id]
-                                        )
+                        paths=[client.V1HTTPIngressPath(
+                            path_type='ImplementationSpecific',
+                            path='/',  # Since we use host-based routing
+                            backend=client.V1IngressBackend(
+                                service=client.V1IngressServiceBackend(
+                                    name=port['name'] if 'name' in port else stack_service_id,
+                                    port=client.V1ServiceBackendPort(
+                                        number=port['port']
                                     )
                                 )
                             )
-                        ]
+                        ) for port in ingress_hosts[stack_service_id]]
                     )
                 ) for stack_service_id in ingress_hosts.keys()
             ])
@@ -528,12 +538,15 @@ def create_ingress(ingress_name, ingress_hosts, **kwargs):
 
 def delete_ingress(name, namespace):
     networkingv1 = client.NetworkingV1Api()
+    try:
+        networkingv1.delete_namespaced_ingress(name=name, namespace=namespace)
 
-    networkingv1.delete_namespaced_ingress(name=name, namespace=namespace)
+        logger.debug("Deleted ingress resource: %s/%s" % (namespace, name))
 
-    logger.debug("Deleted ingress resource: %s/%s" % (namespace, name))
-
-    return
+    except (ApiException, HTTPError) as exc:
+        if not isinstance(exc, ApiException) or exc.status != 404:
+            logger.error("Error deleting ingress resource: %s" % str(exc))
+            raise exc
 
 
 def get_pods():

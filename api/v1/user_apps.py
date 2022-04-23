@@ -37,13 +37,8 @@ def generate_unique_id(username):
             return userapp_id
 
 
-def list_userapps():
-    token = jwt.get_token()
-    claims = jwt.safe_decode(token)
-
-    username = jwt.get_username_from_token(token)
-
-    userapps = data_store.fetch_userapps(username)
+def list_userapps(user, token_info):
+    userapps = data_store.fetch_userapps(user)
 
     return userapps, 200
 
@@ -60,26 +55,26 @@ def to_spec_map(specs, existing_map=None):
     return spec_map
 
 
-def create_userapp(stack):
-    token = jwt.get_token()
-    claims = jwt.safe_decode(token)
-    username = jwt.get_username_from_token(token)
+def create_userapp(stack, user, token_info):
+    stack['creator'] = user
+    stack['id'] = stack['_id'] = generate_unique_id(user)
 
-    stack['creator'] = username
-    #stack['_id'] = generate_unique_id(username)
-
-    spec_map = to_spec_map(data_store.fetch_all_appspecs_for_user(username))
+    spec_map = to_spec_map(data_store.fetch_all_appspecs_for_user(user))
 
     #try:
-    kube.create_userapp(username=username, userapp=stack, spec_map=spec_map)
+    # Create service(s) / ingress / deployment
+    kube.create_userapp(username=user, userapp=stack, spec_map=spec_map)
+
+    # Save metadata to database
     stack = data_store.create_userapp(stack)
 
+    # Return success
     return stack, 201
     #except Exception as e:
-    #    logger.error('Failed to create userapp: %s' % str(e))
-    #    return 'Error', 400
-
-    #return 'Something went wrong', 500
+    # Cleanup failed userapp resources
+    kube.destroy_userapp(username=user, userapp=stack)
+    logger.error('Failed to create userapp: %s' % str(e))
+    return {'error': 'Failed to create userapp: %s' % str(e)}, 400
 
 
 def get_userapp_by_id(stack_id):
@@ -92,40 +87,38 @@ def get_userapp_by_id(stack_id):
     return userapp, 200
 
 
-def update_userapp(stack_id, stack):
-    token = jwt.get_token()
-    claims = jwt.safe_decode(token)
-    username = jwt.get_username_from_token(token)
-
+def update_userapp(stack_id, stack, user, token_info):
     if stack['id'] != stack_id:
-        return 'Bad Request: ID mismatch', 400
-    if stack['creator'] != username:
-        return 'Only the owner may modify a userapp', 403
+        return 'Bad Request: ID mismatch', 400, jwt.get_token_cookie(user)
+    if stack['creator'] != user:
+        return 'Only the owner may modify a userapp', 403, jwt.get_token_cookie(user)
 
     updated = data_store.update_userapp(stack)
+    # TODO: check matched_count vs modified_count?
+    return data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id), 200, jwt.get_token_cookie(user)
 
-    return stack, 200
 
-def delete_userapp(stack_id):
-    token = jwt.get_token()
-    claims = jwt.safe_decode(token)
-    username = jwt.get_username_from_token(token)
-
+def delete_userapp(stack_id, user, token_info):
     # Verify that this user is the owner
-    userapp = data_store.retrieve_userapp_by_id(stack_id)
-    if userapp['creator'] != username:
-        return 'Only the owner may delete a userapp', 403
+    userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id)
+    if userapp['creator'] != user:
+        return 'Only the owner may delete a userapp', 403, jwt.get_token_cookie(user)
 
     try:
-        deleted = data_store.delete_userapp(stack_id)
-        kube.destroy_userapp(username, userapp)
+        kube.destroy_userapp(username=user, userapp=userapp)
+        deleted = data_store.delete_userapp(username=user, userapp_id=stack_id)
+
+        # Verify deletion was successful using deleted_count
+        if deleted.deleted_count > 0:
+            return 204, jwt.get_token_cookie(user)
+        else:
+            return {'error': 'Failed to delete userapp=%s: deletion failed' % stack_id}, 500, jwt.get_token_cookie(user)
     except Exception as e:
-        logger.error('Failed to delete userapp: ' % str(e))
+        logger.error('Failed to delete userapp: %s' % str(e))
+        return {'error': 'Failed to delete userapp: %s' % str(e)}, 500, jwt.get_token_cookie(user)
 
-    return '', 200
 
-
-def rename_userapp(stack_id, name):
+def rename_userapp(stack_id, name, user, token_info):
     token = jwt.get_token()
     claims = jwt.safe_decode(token)
     username = jwt.get_username_from_token(token)
@@ -133,16 +126,14 @@ def rename_userapp(stack_id, name):
 
     # Verify that this user is the owner
     if userapp['creator'] != username:
-        return 'Only the owner may rename a userapp', 403
+        return 'Only the owner may rename a userapp', 403, jwt.get_token_cookie(user)
 
     # Change the name
     userapp['name'] = name
-    update_userapp(stack_id, userapp)
-
-    return userapp, 200
+    return update_userapp(stack_id=stack_id, stack=userapp, user=user, token_info=token_info)
 
 
-def get_stack_service_logs(stack_service_id):
+def get_stack_service_logs(stack_service_id, user, token_info):
     segments = stack_service_id.split('-')
     if segments.length != 2:
         return 'Malformed stack service id', 400
@@ -165,9 +156,9 @@ def get_stack_service_logs(stack_service_id):
     return 'Service key %s not found on Stack ID %s' % (service_key, stack_id), 404
 
 
-def quickstart_stack(key):
-    token = jwt.get_token()
-    username = jwt.get_username_from_token(token)
+def quickstart_stack(key, user, token_info):
+    # token = jwt.get_token()
+    # username = jwt.get_username_from_token(token)
 
     # TODO: Check if user already has an instance of this app
     # TODO: If it exists, start it up and return

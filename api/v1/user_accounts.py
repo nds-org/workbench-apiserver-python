@@ -118,7 +118,9 @@ def update_account(account_id, account):
     # Make sure user can't change password like this
     existing_account = data_store.retrieve_user_by_namespace(account.id)
     account.password = existing_account.password
-    return mongo.parse_json(data_store.update_user(account)), 200
+    updated = data_store.update_user(account)
+    # TODO: check matched_count vs modified_count?
+    return data_store.retrieve_user_by_username(username), 200
 
 
 def delete_account(account_id):
@@ -130,7 +132,9 @@ def delete_account(account_id):
     if username != account_id:
         jwt.validate_scopes(['workbench-accounts'], claims)
 
-    return data_store.delete_user(account_id)
+    deleted = data_store.delete_user(account_id)
+    # TODO: check deleted_count?
+    return 204
 
 
 def register_user(account):

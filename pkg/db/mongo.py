@@ -5,6 +5,7 @@ import logging
 
 from pymongo import MongoClient
 from bson import json_util, ObjectId
+from pymongo.results import DeleteResult, UpdateResult
 
 from pkg import config
 from pkg.auth import jwt
@@ -30,14 +31,14 @@ VOCABULARIES_COLLECTION_NAME = 'vocabularies'
 class MongoStore:
 
     @staticmethod
-    def finalize_id(entity, inserted_id):
+    def finalize_id(entity, inserted_id) -> object:
         if entity is not None and inserted_id is not None:
             entity['_id'] = str(inserted_id)
 
         return MongoStore.serialize(entity)
 
     @staticmethod
-    def serialize(entity):
+    def serialize(entity) -> object or list:
         return MongoStore.from_json(MongoStore.to_json(entity))
 
     @staticmethod
@@ -45,7 +46,7 @@ class MongoStore:
         return json.dumps(obj, default=json_util.default)
 
     @staticmethod
-    def from_json(json_str) -> object:
+    def from_json(json_str) -> object or list:
         return json.loads(json_str)   # , object_hook=json_util.object_hook)
 
     # Sets up a new MongoClient with the given URI
@@ -54,7 +55,7 @@ class MongoStore:
         self.db = self.client[config.MONGO_DB]
 
     # RefreshToken
-    def store_refresh_token(self, token_info, refresh_token):
+    def store_refresh_token(self, token_info, refresh_token) -> object:
         sid = token_info['session_state']
         refr_token_info = jwt.decode_refresh_token(refresh_token)
         refr_token_info['token'] = refresh_token
@@ -64,92 +65,86 @@ class MongoStore:
                                                                    upsert=True)
         return MongoStore.finalize_id(refr_token_info, upsert.upserted_id)
 
-    def clear_refresh_token(self, token_info):
+    def clear_refresh_token(self, token_info) -> DeleteResult:
         return self.db[REFRESHTOKENS_COLLECTION_NAME].delete_one({'session_state': token_info['session_state']})
 
-    def retrieve_refresh_token(self, token_info):
+    def retrieve_refresh_token(self, token_info) -> object:
         return self.db[REFRESHTOKENS_COLLECTION_NAME].find_one({'session_state': token_info['session_state']})
 
     # UserAccounts
-    def create_user(self, new_user):
+    def create_user(self, new_user) -> object:
         created = self.db[USER_ACCOUNTS_COLLECTION_NAME].insert_one(new_user)
         return MongoStore.finalize_id(new_user, created.inserted_id)
 
-    def fetch_users(self):
+    def fetch_users(self) -> list:
         return list(self.db[USER_ACCOUNTS_COLLECTION_NAME].find())
 
-    def retrieve_user_by_username(self, username):
+    def retrieve_user_by_username(self, username) -> object:
         user = self.db[USER_ACCOUNTS_COLLECTION_NAME].find_one({'username': username})
         return MongoStore.serialize(user)
 
-    def update_user(self, updated_user):
+    def update_user(self, updated_user) -> UpdateResult:
         username = updated_user['username']
-        updated = self.db[USER_ACCOUNTS_COLLECTION_NAME].update_one(filter={'username': username},
-                                                                    update={'$set': updated_user})
-        return updated.modified_count
+        return self.db[USER_ACCOUNTS_COLLECTION_NAME].update_one(filter={'username': username},
+                                                                 update={'$set': updated_user})
 
-    def delete_user(self, username):
-        deleted = self.db[USER_ACCOUNTS_COLLECTION_NAME].delete_one({'username': username})
-        return deleted.deleted_count
+    def delete_user(self, username) -> DeleteResult:
+        return self.db[USER_ACCOUNTS_COLLECTION_NAME].delete_one({'username': username})
 
     # AppSpecs
-    def fetch_all_appspecs_for_user(self, username):
+    def fetch_all_appspecs_for_user(self, username) -> list:
         return self.fetch_system_appspecs() + self.fetch_user_appspecs(username)
 
-    def create_system_appspec(self, new_appspec):
+    def create_system_appspec(self, new_appspec) -> object:
         new_appspec['catalog'] = 'system'
         created = self.db[APPSPECS_COLLECTION_NAME].insert_one(new_appspec)
         return MongoStore.finalize_id(new_appspec, created.inserted_id)
 
-    def create_user_appspec(self, new_appspec):
+    def create_user_appspec(self, new_appspec) -> object:
         new_appspec['catalog'] = 'user'
         created = self.db[APPSPECS_COLLECTION_NAME].insert_one(new_appspec)
         return MongoStore.finalize_id(new_appspec, created.inserted_id)
 
-    def fetch_user_appspecs(self, username):
-        return list(self.db[APPSPECS_COLLECTION_NAME].find({'catalog': 'user',
-                                                            'creator': username}))
+    def fetch_user_appspecs(self, username) -> list:
+        return self.serialize(list(self.db[APPSPECS_COLLECTION_NAME].find({'catalog': 'user', 'creator': username})))
 
-    def fetch_system_appspecs(self):
-        return list(self.db[APPSPECS_COLLECTION_NAME].find({'catalog': 'system'}))
+    def fetch_system_appspecs(self) -> list:
+        return self.serialize(list(self.db[APPSPECS_COLLECTION_NAME].find({'catalog': 'system'})))
 
-    def retrieve_user_appspec_by_key(self, username, spec_key):
+    def retrieve_user_appspec_by_key(self, username, spec_key) -> object:
         appspec = self.db[APPSPECS_COLLECTION_NAME].find_one({'key': spec_key,
                                                               'catalog': 'user',
                                                               'creator': username})
         return MongoStore.serialize(appspec)
 
-    def retrieve_system_appspec_by_key(self, spec_key):
+    def retrieve_system_appspec_by_key(self, spec_key) -> object:
         appspec = self.db[APPSPECS_COLLECTION_NAME].find_one({'key': spec_key,
                                                               'catalog': 'system'})
         return MongoStore.serialize(appspec)
 
-    def update_user_appspec(self, username, updated_appspec):
+    def update_user_appspec(self, username, updated_appspec) -> UpdateResult:
         updated_appspec['catalog'] = 'user'
         updated_appspec['creator'] = username
         spec_key = updated_appspec['key']
-        updated = self.db[APPSPECS_COLLECTION_NAME].update_one(filter={'key': spec_key,
-                                                               'catalog': 'user',
-                                                               'creator': username}, update={'$set': updated_appspec})
-        return updated.modified_count
+        return self.db[APPSPECS_COLLECTION_NAME].update_one(filter={'key': spec_key,
+                                                                    'catalog': 'user',
+                                                                    'creator': username},
+                                                            update={'$set': updated_appspec})
 
-    def update_system_appspec(self, updated_appspec):
+    def update_system_appspec(self, updated_appspec) -> UpdateResult:
         spec_key = updated_appspec['key']
-        updated = self.db[APPSPECS_COLLECTION_NAME].update_one(filter={'key': spec_key,
-                                                               'catalog': 'system'}, update={'$set': updated_appspec})
+        return self.db[APPSPECS_COLLECTION_NAME].update_one(filter={'key': spec_key,
+                                                                    'catalog': 'system'},
+                                                            update={'$set': updated_appspec})
 
-        return updated.modified_count
+    def delete_user_appspec(self, username, spec_key) -> DeleteResult:
+        return self.db[APPSPECS_COLLECTION_NAME].delete_one({'key': spec_key,
+                                                             'catalog': 'user',
+                                                             'creator': username})
 
-    def delete_user_appspec(self, username, spec_key):
-        deleted = self.db[APPSPECS_COLLECTION_NAME].delete_one({'key': spec_key,
-                                                                'catalog': 'user',
-                                                                'creator': username})
-        return deleted.deleted_count
-
-    def delete_system_appspec(self, spec_key):
-        deleted = self.db[APPSPECS_COLLECTION_NAME].delete_one({'key': spec_key,
-                                                                'catalog': 'system'})
-        return deleted.deleted_count
+    def delete_system_appspec(self, spec_key) -> DeleteResult:
+        return self.db[APPSPECS_COLLECTION_NAME].delete_one({'key': spec_key,
+                                                             'catalog': 'system'})
 
     # UserApps
     def create_userapp(self, new_userapp):
@@ -164,18 +159,15 @@ class MongoStore:
                                                               'creator': username})
         return MongoStore.serialize(userapp)
 
-    def update_userapp(self, updated_userapp):
+    def update_userapp(self, updated_userapp) -> UpdateResult:
         userapp_id = updated_userapp['id']
         username = updated_userapp['creator']
-        updated = self.db[APPSPECS_COLLECTION_NAME].update_one({'id': userapp_id,
-                                                                'creator': username}, {'$set': updated_userapp})
+        return self.db[APPSPECS_COLLECTION_NAME].update_one({'id': userapp_id,
+                                                             'creator': username}, {'$set': updated_userapp})
 
-        return updated.modified_count
-
-    def delete_userapp(self, username, userapp_id):
-        deleted = self.db[APPSPECS_COLLECTION_NAME].delete_one({'id': userapp_id,
-                                                                'creator': username})
-        return deleted.deleted_count
+    def delete_userapp(self, username, userapp_id) -> DeleteResult:
+        return self.db[APPSPECS_COLLECTION_NAME].delete_one({'id': userapp_id,
+                                                             'creator': username})
 
     # Vocabulary
     def fetch_vocab_by_name(self, vocab_name):

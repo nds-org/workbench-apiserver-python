@@ -1,5 +1,5 @@
 {
-    "key": "mongo",
+    "key": "example4",
     "catalog": "system",
     "label": "MongoDB",
     "image": { 

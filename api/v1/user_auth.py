@@ -1,5 +1,6 @@
 import connexion
 import requests
+import time
 from jose import JWTError, JWSError
 from jose.exceptions import JWKError
 
@@ -18,16 +19,14 @@ def run():
     return None
 
 
-SET_COOKIE_STR = 'token=%s'
-CLEAR_COOKIE_STR = 'token=undefined; Expires=0'
-
-
-def set_token_cookie(token_str):
-    return {'Set-Cookie': 'token=%s' % token_str}
-
-
-def clear_token_cookie():
-    return {'Set-Cookie', 'token=undefined; Expires=0'}
+def response(body, token_str=None, status=200, headers=None):
+    if headers is None:
+        headers = {}
+    if token_str:
+        claims = jwt.safe_decode(token_str)
+        headers.add('Set-Cookie', jwt.get_token_cookie(token_str))
+        return body, status, jwt.get_token_cookie(claims['sub'])
+    return body, status, headers
 
 
 def new_user(username, password, email, name):
@@ -55,12 +54,13 @@ def post_authenticate(auth):
         refresh_token_str = tokens['refresh_token']
         data_store.store_refresh_token(token_info=token_info, refresh_token=refresh_token_str)
 
+        jwt.update_access_token(username=username, access_token=access_token)
         #    logger.info("Password mismatch detected.. synced shadow account: " % account)
-        return {'token': access_token}, 200, set_token_cookie(access_token)
+        return {'token': access_token}, 200, jwt.get_token_cookie(username)
     except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
         # Intentionally vague public error message, verbose log
         logger.error('Failed keycloak login for username=%s: %s' % (username, str(e)))
-        return {'error': 'Invalid credentials'}, 401, clear_token_cookie()
+        return {'error': 'Invalid credentials'}, 401, jwt.clear_token_cookie(username)
 
 
 def delete_authenticate():
@@ -71,23 +71,24 @@ def delete_authenticate():
     refresh_token = data_store.retrieve_refresh_token(token_info=token_info)
     if refresh_token is None:
         # Nothing to delete - noop
-        return 204, clear_token_cookie()
+        return 204, jwt.clear_token_cookie()
 
     refresh_token_str = refresh_token['token']
 
     # Invalidate refresh token
     keycloak.logout(access_token=access_token, refresh_token=refresh_token_str)
     data_store.clear_refresh_token(token_info=token_info)
+    jwt.update_access_token(username=username, access_token=None)
 
     # Invalidate any cookies
-    return 204, clear_token_cookie()
+    return 204, jwt.clear_token_cookie()
 
 
 def refresh_token(user, token_info):
     # Check for existing refresh token
     refresh_token = data_store.retrieve_refresh_token(token_info=token_info)
     if refresh_token is None:
-        return {'error': 'Token has expired'}, 401, clear_token_cookie()
+        return {'error': 'Token has expired'}, 401, jwt.clear_token_cookie()
 
     refresh_token_str = refresh_token['token']
 
@@ -96,12 +97,17 @@ def refresh_token(user, token_info):
 
     # Return new access token
     access_token = tokens['access_tokens']
-    return {'token': access_token}, 200, set_token_cookie(access_token)
+    jwt.update_access_token(username=user, access_token=access_token)
+    return {'token': access_token}, 200, jwt.get_token_cookie(access_token)
 
 
 def check_token(user, token_info):
     try:
-        jwt.decode(token_info)
+        if user != token_info['sub']:
+            return {'error': 'Invalid token'}, 401
+        # TODO: Check token expiry?
+        #if token_info['exp'] < time.time():
+        #    return {'error': 'Invalid token'}, 401
         return {'status': 'Token is valid'}, 200
     except (JWTError, JWSError, JWKError) as e:
         return {'error': 'Invalid token'}, 401

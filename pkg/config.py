@@ -9,7 +9,7 @@ from jose import jwk
 from jose.utils import base64url_decode
 
 logger = logging.getLogger('config')
-
+DEBUG = os.getenv('DEBUG', 'false').lower() in ('true', '1', 't')
 
 DOMAIN = 'local.ndslabs.org'
 
@@ -21,7 +21,7 @@ ETCD_PORT = os.getenv('ETCD_PORT', 4001)
 ETCD_BASE_PATH = os.getenv('ETCD_BASE_PATH', '/ndslabs')
 
 # MongoStore
-MONGO_URI = os.getenv('MONGO_URI', 'mongodb://user:pass@localhost:27017/ndslabs')
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/ndslabs')
 MONGO_DB = os.getenv('MONGO_DB', 'ndslabs')
 
 # Kubernetes
@@ -62,6 +62,9 @@ def download_remote_swagger_to_temp_file(temp_file_name='swagger-keycloak.yml'):
 # Use central Keycloak
 KEYCLOAK_HOST = os.getenv('KEYCLOAK_HOST', 'http://localhost:8080')
 KEYCLOAK_REALM = os.getenv('KEYCLOAK_REALM', 'workbench-dev')
+KEYCLOAK_CLIENT_ID = os.getenv('KEYCLOAK_CLIENT_ID', 'workbench-local')
+KEYCLOAK_CLIENT_SECRET = os.getenv('KEYCLOAK_CLIENT_SECRET', '')
+
 KC_REALM_URL = '%s/realms/%s' % (KEYCLOAK_HOST, KEYCLOAK_REALM)
 KC_OIDC_PREFIX = '%s/protocol/openid-connect' % KC_REALM_URL
 KC_TOKEN_URL = "%s/token" % KC_OIDC_PREFIX
@@ -72,8 +75,6 @@ KC_AUTH_URL = "%s/auth" % KC_OIDC_PREFIX
 # system-generated params
 KC_ALGORITHM = os.getenv('KC_ALGORITHM', 'RS256')
 KC_GRANT_TYPE = 'password'
-KC_CLIENT_ID = os.getenv('KEYCLOAK_CLIENT_ID', 'workbench-local')
-KC_CLIENT_SECRET = os.getenv('KEYCLOAK_CLIENT_SECRET', '')
 KC_SCOPE = 'profile email openid workbench-accounts'
 
 # system-specific config
