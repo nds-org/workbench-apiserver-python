@@ -1,5 +1,7 @@
 import logging
 import json
+import string
+import random
 import time
 from kubernetes import client, config as kubeconfig, watch
 from kubernetes.client import ApiException, V1ResourceRequirements
@@ -8,7 +10,6 @@ from requests import HTTPError
 from pkg import config
 from pkg.config import KUBE_WORKBENCH_NAMESPACE, KUBE_WORKBENCH_RESOURCE_PREFIX
 from pkg.exceptions import AppSpecNotFoundError
-
 
 
 CRD_GROUP_NAME = "ndslabs.org"
@@ -25,8 +26,8 @@ kubeconfig.load_kube_config()
 custom = client.CustomObjectsApi()
 
 # TODO: V2 - watch custom resources and react accordingly
-#watched_namespaces = ["test"]
-#for namespace in watched_namespaces:
+# watched_namespaces = ["test"]
+# for namespace in watched_namespaces:
 #    count = 10
 #    w = watch.Watch()
 #    for event in w.stream(custom.list_namespaced_custom_object,
@@ -40,6 +41,14 @@ custom = client.CustomObjectsApi()
 #        time.sleep(10)
 #        if not count:
 #            w.stop()
+
+
+def generate_random_password(length=16):
+    # choose from all lowercase letter
+    letters = string.ascii_letters + string.digits + string.punctuation
+    result_str = ''.join(random.choice(letters) for i in range(length))
+    logger.debug("Random string of length=%d is: %s" % (length, result_str))
+    return result_str
 
 
 # Workbench-specific helpers
@@ -135,31 +144,41 @@ def create_userapp(username, userapp, spec_map):
         service_ports = app_spec['ports'] if 'ports' in app_spec else []
         ingress_hosts[stack_service_id] = service_ports
 
+        # Build up config from userapp env/config and appspec config
+        configmap_data = userapp['config'] if 'config' in userapp else {}
+        spec_config = app_spec['config'] if 'config' in app_spec else []
+        for cfg in spec_config:
+            if not cfg.canOverride:
+                configmap_data[cfg.name] = cfg.value   # reset to spec value if we can't override
+            if cfg.isPassword and cfg.canOverride and not cfg.value:
+                configmap_data[cfg.name] = generate_random_password()  # generate password if none is provided
+
         # Create one pod container per-stack service
         containers.append({
             'name': stack_service_id,
             'resourceLimits': stack_service['resourceLimits'] if 'resourceLimits' in stack_service else app_spec['resourceLimits'] if 'resourceLimits' in app_spec else {},
             'command': stack_service['command'] if 'command' in stack_service else None,
             'image': stack_service['image'] if 'image' in stack_service else app_spec['image'],
-            'configmap': "%s-config" % resource_name,  # not currently used
+            'configmap': resource_name,  # not currently used
             'prestop': stack_service['prestop'] if 'prestop' in stack_service else None,
             'poststart': stack_service['poststart'] if 'poststart' in stack_service else None,
             'ports': service_ports,
         })
 
-        # Create one Kubernetes service container per-stack service
+        # Create one Kubernetes service per-stack service
         create_service(service_name=resource_name,
                        namespace=namespace, labels=labels,
                        service_ports=service_ports)
 
-        # TODO: create_configmap() per-service?
+        # Create one Kubernetes configmap per-stack service
+        create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
 
     # Create one ingress per-stack
     create_ingress(ingress_name=get_resource_name(userapp_id, userapp_key),
                    namespace=namespace, labels=labels,
                    ingress_hosts=ingress_hosts)
 
-    # Create one deployment per-stack (start with 0 replicas, aka Stopped)
+    # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
     create_deployment(deployment_name=get_resource_name(userapp_id, userapp_key),
                       namespace=namespace,
                       replicas=0,
@@ -174,11 +193,13 @@ def destroy_userapp(username, userapp):
     name = get_resource_name(userapp_id, userapp_key)
     namespace = get_resource_namespace(username)
     delete_deployment(name=name, namespace=namespace)
-    # TODO: delete configmap, networkpolicy? (currently unused)
     delete_ingress(name=name, namespace=namespace)
+    # TODO: networkpolicy? (currently unused)
+
     for stack_service in userapp['services']:
         service_key = stack_service['service']
         name = get_resource_name(userapp_id, userapp_key, service_key)
+        delete_configmap(name=name, namespace=namespace)
         delete_service(name=name, namespace=namespace)
 
     return
@@ -256,7 +277,7 @@ def create_configmap(configmap_name, configmap_data, **kwargs):
             raise exc
 
 
-def update_config_map(configmap_name, configmap_data, **kwargs):
+def update_configmap(configmap_name, configmap_data, **kwargs):
     v1 = client.CoreV1Api()
     configmap_namespace = kwargs['namespace'] if 'namespace' in kwargs else 'default'
     configmap_labels = kwargs['labels'] if 'labels' in kwargs else {}
@@ -277,12 +298,23 @@ def update_config_map(configmap_name, configmap_data, **kwargs):
                                             ))
 
 
-def get_config_map(configmap_name, **kwargs):
+def retrieve_configmap(configmap_name, **kwargs):
     v1 = client.CoreV1Api()
     configmap_namespace = kwargs['namespace'] if 'namespace' in kwargs else 'default'
     configmap = v1.read_namespaced_config_map(configmap_name, configmap_namespace)
 
     return configmap.data
+
+
+def delete_configmap(name, namespace):
+    v1 = client.CoreV1Api()
+    try:
+        v1.delete_namespaced_config_map(name=name, namespace=namespace)
+        logger.debug("Deleted configmap resource: %s/%s" % (namespace, name))
+    except (ApiException, HTTPError) as exc:
+        if not isinstance(exc, ApiException) or exc.status != 404:
+            logger.error("Error deleting configmap resource: %s" % str(exc))
+            raise exc
 
 
 def create_persistent_volume_claim(pvc_name, **kwargs):
