@@ -2,7 +2,7 @@ import logging
 import json
 import time
 from kubernetes import client, config as kubeconfig, watch
-from kubernetes.client import ApiException
+from kubernetes.client import ApiException, V1ResourceRequirements
 from requests import HTTPError
 
 from pkg import config
@@ -131,7 +131,7 @@ def create_userapp(username, userapp, spec_map):
             logger.error("Failed to find app_spec: %s" % service_key)
             raise AppSpecNotFoundError("Failed to find app_spec: %s" % service_key)
         stack_service_id = get_stack_service_id(userapp_id, service_key)
-        resource_name = get_resource_name(stack_service_id, service_key)
+        resource_name = get_resource_name(userapp_id, userapp_key, service_key)
         service_ports = app_spec['ports'] if 'ports' in app_spec else []
         ingress_hosts[stack_service_id] = service_ports
 
@@ -152,6 +152,8 @@ def create_userapp(username, userapp, spec_map):
                        namespace=namespace, labels=labels,
                        service_ports=service_ports)
 
+        # TODO: create_configmap() per-service?
+
     # Create one ingress per-stack
     create_ingress(ingress_name=get_resource_name(userapp_id, userapp_key),
                    namespace=namespace, labels=labels,
@@ -167,13 +169,17 @@ def create_userapp(username, userapp, spec_map):
 
 # Cleans up the Kubernetes resources related to a userapp
 def destroy_userapp(username, userapp):
-    appId = userapp['id']
+    userapp_id = userapp['id']
+    userapp_key = userapp['key']
+    name = get_resource_name(userapp_id, userapp_key)
     namespace = get_resource_namespace(username)
-    delete_deployment(appId, namespace=namespace)
-    # TODO: delete_configmap (currently unused)
-    delete_ingress(appId, namespace=namespace)
+    delete_deployment(name=name, namespace=namespace)
+    # TODO: delete configmap, networkpolicy? (currently unused)
+    delete_ingress(name=name, namespace=namespace)
     for stack_service in userapp['services']:
-        delete_service(stack_service['id'], namespace=namespace)
+        service_key = stack_service['service']
+        name = get_resource_name(userapp_id, userapp_key, service_key)
+        delete_service(name=name, namespace=namespace)
 
     return
 
@@ -359,13 +365,18 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
             client.V1Container(
                 name=container['name'],
                 command=container['command'],
-                env_from=[
-                    client.V1EnvFromSource(
-                        config_map_ref=client.V1ConfigMapEnvSource(
-                            name=container['configmap']
-                        )
-                    )
-                ],
+                # TODO: resource limits
+                # resources=V1ResourceRequirements(),
+                #
+                # TODO: create configmap with env
+                # env_from=[
+                #     client.V1EnvFromSource(
+                #         config_map_ref=client.V1ConfigMapEnvSource(
+                #             name=container['configmap']
+                #         )
+                #     )
+                # ],
+                #
                 # TODO: container.lifecycle?
                 lifecycle=container['lifecycle'] if 'lifecycle' in container else None,
                 image=get_image_string(container['image']),

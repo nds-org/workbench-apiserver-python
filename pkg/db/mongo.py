@@ -152,7 +152,7 @@ class MongoStore:
         return MongoStore.finalize_id(new_userapp, created.inserted_id)
 
     def fetch_userapps(self, username):
-        return list(self.db[USERAPPS_COLLECTION_NAME].find({'creator': username}))
+        return MongoStore.serialize(list(self.db[USERAPPS_COLLECTION_NAME].find({'creator': username})))
 
     def retrieve_userapp_by_id(self, username, userapp_id):
         userapp = self.db[USERAPPS_COLLECTION_NAME].find_one({'id': userapp_id,
@@ -162,11 +162,11 @@ class MongoStore:
     def update_userapp(self, updated_userapp) -> UpdateResult:
         userapp_id = updated_userapp['id']
         username = updated_userapp['creator']
-        return self.db[APPSPECS_COLLECTION_NAME].update_one({'id': userapp_id,
+        return self.db[USERAPPS_COLLECTION_NAME].update_one({'id': userapp_id,
                                                              'creator': username}, {'$set': updated_userapp})
 
     def delete_userapp(self, username, userapp_id) -> DeleteResult:
-        return self.db[APPSPECS_COLLECTION_NAME].delete_one({'id': userapp_id,
+        return self.db[USERAPPS_COLLECTION_NAME].delete_one({'id': userapp_id,
                                                              'creator': username})
 
     # Vocabulary
