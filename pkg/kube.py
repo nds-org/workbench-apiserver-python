@@ -148,10 +148,12 @@ def create_userapp(username, userapp, spec_map):
         configmap_data = userapp['config'] if 'config' in userapp else {}
         spec_config = app_spec['config'] if 'config' in app_spec else []
         for cfg in spec_config:
-            if not cfg.canOverride:
-                configmap_data[cfg.name] = cfg.value   # reset to spec value if we can't override
-            if cfg.isPassword and cfg.canOverride and not cfg.value:
-                configmap_data[cfg.name] = generate_random_password()  # generate password if none is provided
+            if not cfg['canOverride']:
+                # reset to spec value if we can't override
+                configmap_data[cfg.name] = cfg['value'] if 'value' in cfg else ''
+            if cfg['isPassword'] and cfg['canOverride'] and not cfg['value']:
+                # generate password if none is provided
+                configmap_data[cfg.name] = generate_random_password()
 
         # Create one pod container per-stack service
         containers.append({
