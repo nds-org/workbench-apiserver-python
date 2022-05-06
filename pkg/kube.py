@@ -172,8 +172,9 @@ def create_userapp(username, userapp, spec_map):
                        namespace=namespace, labels=labels,
                        service_ports=service_ports)
 
-        # Create one Kubernetes configmap per-stack service
-        create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
+        if len(configmap_data) > 0:
+            # Create one Kubernetes configmap per-stack service
+            create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
 
     # Create one ingress per-stack
     create_ingress(ingress_name=get_resource_name(userapp_id, userapp_key),
@@ -660,6 +661,19 @@ def create_network_policy(policy_name, **kwargs):
     return policy
 
 
+def delete_network_policy(name, **kwargs):
+    networkingv1 = client.NetworkingV1Api()
+    namespace = kwargs['namespace'] if 'namespace' in kwargs else 'default'
+
+    try:
+        networkingv1.delete_namespaced_network_policy(namespace=namespace, name=name)
+        logger.debug("Deleted networkpolicy resource: %s/%s" % (namespace, name))
+    except (ApiException, HTTPError) as exc:
+        if not isinstance(exc, ApiException) or exc.status != 404:
+            logger.error("Error deleting networkpolicy resource: %s" % str(exc))
+            raise exc
+
+
 def create_resource_quota(quota_name, hard_quotas, **kwargs):
     v1 = client.CoreV1Api()
 
@@ -667,28 +681,33 @@ def create_resource_quota(quota_name, hard_quotas, **kwargs):
     quota_labels = kwargs['labels'] if 'labels' in kwargs else {}
     quota_annotations = kwargs['annotations'] if 'annotations' in kwargs else {}
 
-    quota = v1.create_namespaced_resource_quota(quota_namespace, body=client.V1ResourceQuota(
-        api_version='v1',
-        kind='ResourceQuota',
-        metadata=client.V1ObjectMeta(
-            name=quota_name,
-            namespace=quota_namespace,
-            annotations=quota_annotations,
-            labels=quota_labels
-        ),
-        spec=client.V1ResourceQuotaSpec(
-            scope_selector=client.V1ScopeSelector(
-              match_expressions=[
-                  # TODO: Selector for namespace and/or user labels
-                  #client.V1ScopedResourceSelectorRequirement(
-                      # scop
-                  #)
-              ]
+    try:
+        quota = v1.create_namespaced_resource_quota(quota_namespace, body=client.V1ResourceQuota(
+            api_version='v1',
+            kind='ResourceQuota',
+            metadata=client.V1ObjectMeta(
+                name=quota_name,
+                namespace=quota_namespace,
+                annotations=quota_annotations,
+                labels=quota_labels
             ),
-            hard=hard_quotas
-        )
-    ))
-    return quota
+            spec=client.V1ResourceQuotaSpec(
+                scope_selector=client.V1ScopeSelector(
+                  match_expressions=[
+                      # TODO: Selector for namespace and/or user labels
+                      #client.V1ScopedResourceSelectorRequirement(
+                          # scop
+                      #)
+                  ]
+                ),
+                hard=hard_quotas
+            )
+        ))
+        return quota
+    except (ApiException, HTTPError) as exc:
+        if not isinstance(exc, ApiException) or exc.status != 409:
+            logger.error("Error creating networkpolicy resource: %s" % str(exc))
+            raise exc
 
 
 #

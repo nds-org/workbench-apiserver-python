@@ -55,6 +55,14 @@ def to_spec_map(specs, existing_map=None):
     return spec_map
 
 
+def update_userapp_replicas(username, userapp_id, replicas):
+    name = kube.get_resource_name(userapp_id)
+    namespace = kube.get_resource_namespace(username)
+    kube.patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
+
+    return
+
+
 def create_userapp(stack, user, token_info):
     stack['creator'] = user
     stack_id = generate_unique_id(user)
@@ -181,20 +189,22 @@ def quickstart_stack(key, user, token_info):
 
 def start_stack(stack_id, user, token_info):
     # Lookup userapp using the id
-    userapp = data_store.retrieve_userapp_by_id(stack_id)
+    userapp = data_store.retrieve_userapp_by_id(userapp_id=stack_id, username=user)
 
     # Verify that this user is the owner
     if userapp['creator'] != user:
         return {'error': 'Only the owner may launch a userapp'}, 403, jwt.get_token_cookie(user)
 
-    # TODO: Create Deployment in Kubernetes
-
     # TODO: Mark userapp as STARTING, then return
+    if 'status' not in userapp or not userapp['status'] or userapp['status'] == 'stopped':
+        userapp['status'] = 'starting'
+
+    update_userapp_replicas(username=user, userapp_id=stack_id, replicas=1)
 
     # TODO: Eventually, Pod is Running and event watchers
     #    should update userapp state to STARTED
 
-    return '', 202, jwt.get_token_cookie(user)
+    return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
 
 
 def stop_stack(stack_id, user, token_info):
@@ -205,9 +215,11 @@ def stop_stack(stack_id, user, token_info):
     if userapp['creator'] != user:
         return {'error': 'Only the owner may shutdown a userapp'}, 403, jwt.get_token_cookie(user)
 
-    # TODO: Delete Deployment in Kubernetes
+    # TODO: Mark userapp as STARTING, then return
+    if 'status' not in userapp or not userapp['status'] or userapp['status'] == 'stopped':
+        userapp['status'] = 'starting'
 
-    # TODO: Mark userapp as STOPPING, then return
+    update_userapp_replicas(username=user, userapp_id=stack_id, replicas=0)
 
     # TODO: Eventually, Pod is gone and event watchers
     #    should update userapp state to STOPPED
