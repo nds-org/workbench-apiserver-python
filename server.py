@@ -37,4 +37,5 @@ if __name__ == '__main__':
                     arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501,
                     strict_validation=True)
 
+    watcher = kube.KubeEventWatcher()
     app.run(port=5000, host='0.0.0.0', server='flask', debug=debug)

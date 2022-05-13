@@ -14,6 +14,23 @@ DEBUG = os.getenv('DEBUG', 'false').lower() in ('true', '1', 't')
 DOMAIN = 'local.ndslabs.org'
 
 # v1
+DEFAULT_ACCT_MEM = '8GB'
+DEFAULT_ACCT_CPU = '2M'
+
+DEFAULT_MEM_REQ = '512MB'
+DEFAULT_MEM_LIM = '1GB'
+DEFAULT_CPU_REQ = '100m'
+DEFAULT_CPU_LIM = '500m'
+
+DEV_MEM_REQ = '1GB'
+DEV_MEM_LIM = '2GB'
+DEV_CPU_REQ = '500m'
+DEV_CPU_LIM = '1M'
+
+ADMIN_MEM_REQ = '512MB'
+ADMIN_MEM_LIM = '1GB'
+ADMIN_CPU_REQ = '100M'
+ADMIN_CPU_LIM = '2M'
 
 # EtcdStore
 ETCD_HOST = os.getenv('ETCD_HOST', '127.0.0.1')

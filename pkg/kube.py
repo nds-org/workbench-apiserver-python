@@ -1,10 +1,10 @@
 import logging
-import json
 import string
 import random
-import time
-from kubernetes import client, config as kubeconfig, watch
-from kubernetes.client import ApiException, V1ResourceRequirements
+import threading
+
+from kubernetes import watch, client, config as kubeconfig
+from kubernetes.client import ApiException
 from requests import HTTPError
 
 from pkg import config
@@ -41,6 +41,76 @@ custom = client.CustomObjectsApi()
 #        time.sleep(10)
 #        if not count:
 #            w.stop()
+
+
+class KubeEventWatcher:
+
+    def __init__(self):
+        self.logger = logging.getLogger('kube-event-watcher')
+        self.thread = threading.Thread(target=self.run, name='kube-event-watcher', daemon=True)
+        logger.info('Starting Kube event watcher')
+        self.thread.start()
+
+    def run(self):
+        w = watch.Watch()
+        v1 = client.CoreV1Api()
+        appsv1 = client.AppsV1Api()
+
+        # Resource version is used to keep track of stream progress (in case of resume)
+        resource_version = ""
+
+        # Ignore kube-system namespace
+        # TODO: Parameterize this?
+        ignored_namespaces = ['kube-system']
+
+        while True:
+            stream = w.stream(func=v1.list_pod_for_all_namespaces, resource_version=resource_version)
+            resource_version = v1.list_pod_for_all_namespaces().metadata.resource_version
+
+            # Parse events in the stream for Pod status updates
+            for event in stream:
+                # Skip Pods in ignored namespaces
+                if event['object'].metadata.namespace in ignored_namespaces:
+                    continue
+
+                #logger.debug('Received pod event: %s' % str(event['object'].status))
+
+                # TODO: lookup associated userapp using resource name
+                name = event['object'].metadata.name
+                type = event['type']
+                status = event['object'].status.phase
+
+                self.logger.info('Pod=%s  type=%s  status=%s' % (name, type, status))
+
+                new_status = status   # default is no change
+                # TODO: Update stack service status according to phase/type
+                if status == 'Pending':   # TODO: initial scheduling phase
+                    new_status = 'initializing'
+                elif type == 'ADDED':  # TODO: 'starting' incremental status updates
+                    new_status = 'starting'
+                elif type == 'DELETED':  # TODO: 'stopping' incremental status updates
+                    new_status = 'stopped'
+                elif type == 'MODIFIED':  # TODO: granular incremental status updates (conditions?)
+                    new_status = 'starting'
+                #else:
+                #    self.logger.debug('Ignoring event not meant for Pods: %s' % event)
+
+                # if event["object"].status.phase == "Running":
+                #     watch.stop()
+                #     end_time = time.time()
+                #     full_name = event["object"].metadata.name
+                #     namespace = event["object"].metadata.namespace
+                #     #logger.info("%s started in %s in %0.2f sec", full_name, namespace, end_time - start_time)
+                #     return
+                # # event.type: ADDED, MODIFIED, DELETED
+                # if event["type"] == "DELETED":
+                #     # Pod was deleted while we were waiting for it to start.
+                #     logger.debug("%s deleted before it started", full_name)
+                #     w.stop()
+                #     return
+
+    def is_alive(self):
+        return self.thread.is_alive()
 
 
 def generate_random_password(length=16):
@@ -240,13 +310,24 @@ def delete_namespace(name):
     return
 
 
+def get_deployment(name, namespace):
+    try:
+        return client.AppsV1Api().read_namespaced_deployment(name=name, namespace=namespace)
+    except (ApiException, HTTPError) as exc:
+        if isinstance(exc, ApiException) and exc.status == 404:
+            return None
+        else:
+            logger.error("Error reading deployment resource: %s" % str(exc))
+            raise exc
+
+
 def patch_scale_deployment(deployment_name, namespace, replicas):
-    appsv1 = client.AppsV1Api()
-    return appsv1.patch_namespaced_deployment_scale(namespace=namespace, name=deployment_name, body=client.V1Deployment(
-        spec=client.V1DeploymentSpec(
-            replicas=replicas
-        )
-    ))
+    deployment = get_deployment(name=deployment_name, namespace=namespace)
+    if deployment is None:
+        return None
+
+    return client.AppsV1Api().patch_namespaced_deployment_scale(namespace=namespace, name=deployment_name,
+                                                                body={'spec': {'replicas': replicas}})
 
 
 def create_configmap(configmap_name, configmap_data, **kwargs):

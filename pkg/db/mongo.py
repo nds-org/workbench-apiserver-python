@@ -154,9 +154,12 @@ class MongoStore:
     def fetch_userapps(self, username):
         return MongoStore.serialize(list(self.db[USERAPPS_COLLECTION_NAME].find({'creator': username})))
 
-    def retrieve_userapp_by_id(self, username, userapp_id):
-        userapp = self.db[USERAPPS_COLLECTION_NAME].find_one({'id': userapp_id,
-                                                              'creator': username})
+    def retrieve_userapp_by_id(self, userapp_id, username=None):
+        if username is None:
+            userapp = self.db[USERAPPS_COLLECTION_NAME].find_one({'id': userapp_id})
+        else:
+            userapp = self.db[USERAPPS_COLLECTION_NAME].find_one({'id': userapp_id,
+                                                                  'creator': username})
         return MongoStore.serialize(userapp)
 
     def update_userapp(self, updated_userapp) -> UpdateResult:
