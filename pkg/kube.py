@@ -1,6 +1,10 @@
 import logging
+import logging.config
 import string
 import random
+import time
+
+import requests
 import threading
 
 from kubernetes import watch, client, config as kubeconfig
@@ -22,8 +26,12 @@ CRD_USERAPPS_KIND = "WorkbenchUserApp"
 
 logger = logging.getLogger('kube')
 
+BASE_URL = 'http://localhost:5000'
+
 kubeconfig.load_kube_config()
 custom = client.CustomObjectsApi()
+
+client.api_client.rest.logger.setLevel(logging.WARNING)
 
 # TODO: V2 - watch custom resources and react accordingly
 # watched_namespaces = ["test"]
@@ -63,51 +71,103 @@ class KubeEventWatcher:
         # TODO: Parameterize this?
         ignored_namespaces = ['kube-system']
 
+        # Include workbench app labels
+        # Example:      'labels': {'manager': 'workbench',
+        #                          'pod-template-hash': '977967b76',
+        #                          'user': 'test',
+        #                          'workbench-app': 's00402'}
+        # TODO: Parameterize this?
+        required_labels = {
+            'manager': 'workbench'
+        }
+
         while True:
-            stream = w.stream(func=v1.list_pod_for_all_namespaces, resource_version=resource_version)
-            resource_version = v1.list_pod_for_all_namespaces().metadata.resource_version
+            try:
+                stream = w.stream(func=v1.list_pod_for_all_namespaces, resource_version=resource_version)
+                resource_version = v1.list_pod_for_all_namespaces().metadata.resource_version
 
-            # Parse events in the stream for Pod status updates
-            for event in stream:
-                # Skip Pods in ignored namespaces
-                if event['object'].metadata.namespace in ignored_namespaces:
-                    continue
+                # Parse events in the stream for Pod status updates
+                for event in stream:
+                    # Skip Pods in ignored namespaces
+                    if event['object'].metadata.namespace in ignored_namespaces:
+                        continue
 
-                #logger.debug('Received pod event: %s' % str(event['object'].status))
+                    #logger.debug('Received pod event: %s' % str(event['object'].status))
 
-                # TODO: lookup associated userapp using resource name
-                name = event['object'].metadata.name
-                type = event['type']
-                status = event['object'].status.phase
+                    # Examine labels, ignore if not workbench app
+                    #logger.debug('Event recv\'d: %s' % event)
+                    labels = event['object'].metadata.labels
 
-                self.logger.info('Pod=%s  type=%s  status=%s' % (name, type, status))
+                    missing_labels = [x for x in required_labels if x not in labels]
+                    if len(missing_labels) > 0:
+                        self.logger.warning('WARNING: Skipping due to missing required label(s): ' + missing_labels)
+                        continue
 
-                new_status = status   # default is no change
-                # TODO: Update stack service status according to phase/type
-                if status == 'Pending':   # TODO: initial scheduling phase
-                    new_status = 'initializing'
-                elif type == 'ADDED':  # TODO: 'starting' incremental status updates
-                    new_status = 'starting'
-                elif type == 'DELETED':  # TODO: 'stopping' incremental status updates
-                    new_status = 'stopped'
-                elif type == 'MODIFIED':  # TODO: granular incremental status updates (conditions?)
-                    new_status = 'starting'
-                #else:
-                #    self.logger.debug('Ignoring event not meant for Pods: %s' % event)
+                    # TODO: lookup associated userapp using resource name
+                    name = event['object'].metadata.name
 
-                # if event["object"].status.phase == "Running":
-                #     watch.stop()
-                #     end_time = time.time()
-                #     full_name = event["object"].metadata.name
-                #     namespace = event["object"].metadata.namespace
-                #     #logger.info("%s started in %s in %0.2f sec", full_name, namespace, end_time - start_time)
-                #     return
-                # # event.type: ADDED, MODIFIED, DELETED
-                # if event["type"] == "DELETED":
-                #     # Pod was deleted while we were waiting for it to start.
-                #     logger.debug("%s deleted before it started", full_name)
-                #     w.stop()
-                #     return
+                    # Parse name into userapp_id + ssid
+                    segments = name.split('-')
+                    if len(segments) < 4:
+                        self.logger.warning('WARNING: Invalid number of segments -  PodName=%s' % name)
+                        continue
+
+                    userapp_id = segments[0]
+                    service_key = '-'.join(segments[1:-2])
+
+                    type = event['type']
+                    status = event['object'].status.phase
+
+                    self.logger.info('UserappId=%s  ServiceKey=%s  type=%s  status=%s' % (userapp_id, service_key, type, status))
+
+                    new_status = status   # default is no status change
+
+                    # TODO: Update stack service status according to phase/type
+                    if status == 'Pending':   # TODO: initial scheduling phase
+                        new_status = 'initializing'
+                    elif status == 'Error':  # TODO: errors at startup/runtime
+                        new_status = 'error'
+                    elif status == 'Running' and type != 'DELETED':  # TODO: errors at startup/runtime
+                        new_status = 'running'
+                    elif type == 'ADDED':  # TODO: 'starting' incremental status updates
+                        new_status = 'created'
+                    elif type == 'DELETED':  # TODO: 'stopping' incremental status updates
+                        new_status = 'stopped'
+                    elif type == 'MODIFIED':  # TODO: granular incremental status updates (conditions?)
+                        new_status = 'starting'
+
+                    # FIXME: import mongo data_store here instead?
+                    resp = requests.put((config.CALLBACK_URL_TEMPLATE + '?service_key=%s&new_status=%s') % (userapp_id, service_key, new_status),
+                        headers={
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer %s' % config.CALLBACK_SERVICE_ACCOUNT_JWT
+                        })
+                    resp.raise_for_status()
+
+            except HTTPError as e:
+                logger.error("Failed to update service status: " + str(e))
+                continue
+            except ApiException as e:
+                logger.error("Connection to kube API failed: " + str(e))
+                time.sleep(2)
+                continue
+
+                    #else:
+                    #    self.logger.debug('Ignoring event not meant for Pods: %s' % event)
+
+                    # if event["object"].status.phase == "Running":
+                    #     watch.stop()
+                    #     end_time = time.time()
+                    #     full_name = event["object"].metadata.name
+                    #     namespace = event["object"].metadata.namespace
+                    #     #logger.info("%s started in %s in %0.2f sec", full_name, namespace, end_time - start_time)
+                    #     return
+                    # # event.type: ADDED, MODIFIED, DELETED
+                    # if event["type"] == "DELETED":
+                    #     # Pod was deleted while we were waiting for it to start.
+                    #     logger.debug("%s deleted before it started", full_name)
+                    #     w.stop()
+                    #     return
 
     def is_alive(self):
         return self.thread.is_alive()

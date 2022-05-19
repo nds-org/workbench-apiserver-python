@@ -119,12 +119,12 @@ def get_username_from_token(token=None):
 
 
 def validate_apikey_querystring(apikey, required_scopes):
-    logger.info("Checking for auth (querystring): %s" % apikey)
+    #logger.info("Checking for auth (querystring): %s" % apikey)
     return validate_token(apikey, required_scopes)
 
 
 def validate_auth_header(apikey, required_scopes):
-    logger.info("Checking for auth (header): %s" % apikey)
+    #logger.debug("Checking for auth (header): %s" % apikey)
     # format: bearer <jwt>
     # we only want the jwt, strip out the literal "bearer"
     token = apikey.split(" ")[-1]
@@ -133,13 +133,13 @@ def validate_auth_header(apikey, required_scopes):
 
 
 def validate_apikey_header(apikey, required_scopes):
-    logger.info("Checking for auth (apikey): %s" % apikey)
+    #logger.debug("Checking for auth (apikey): %s" % apikey)
     #token = get_token_from_cookies()
     return validate_token(apikey, required_scopes)
 
 
 def validate_auth_cookie(cookies, required_scopes):
-    logger.info("Checking for auth (cookie): %s" % cookies)
+    #logger.debug("Checking for auth (cookie): %s" % cookies)
     if 'token' not in cookies:
         #raise Unauthorized
         return None   # Missing credentials / token

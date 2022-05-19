@@ -14,7 +14,7 @@ python-jose[cryptography]==3.3.0
 bcrypt==3.2.0
 
 # Kubernetes
-kubernetes==19.15.0a1
+kubernetes==23.6.0
 
 # MongoDB
 pymongo==4.0.1

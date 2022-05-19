@@ -203,9 +203,12 @@ def start_stack(stack_id, user, token_info):
     if userapp['creator'] != user:
         return {'error': 'Only the owner may launch a userapp'}, 403, jwt.get_token_cookie(user)
 
+    userapp['status'] = 'starting'
+
     # TODO: Eventually, Pod is Running and event watchers
     #    should update userapp state to STARTED
     if update_userapp_replicas(username=user, userapp_id=stack_id, replicas=1):
+        data_store.update_userapp(userapp)
         return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
     else:
         return {'status': 'error',
@@ -220,14 +223,75 @@ def stop_stack(stack_id, user, token_info):
     if userapp['creator'] != user:
         return {'error': 'Only the owner may shutdown a userapp'}, 403, jwt.get_token_cookie(user)
 
+    userapp['status'] = 'stopping'
+
     # TODO: Eventually, Pod is gone and event watchers
     #    should update userapp state to STOPPED
     if update_userapp_replicas(username=user, userapp_id=stack_id, replicas=0):
+        data_store.update_userapp(userapp)
         return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
     else:
         return {'status': 'error',
                 'error': 'failed to set replicas=0 for %s' % stack_id}, 400, jwt.get_token_cookie(user)
 
+
+# Returns True if update was successful
+def update_userapp_status(stack_id, service_key, new_status, user, token_info):
+    userapp_id = stack_id
+    userapp = data_store.retrieve_userapp_by_id(userapp_id=userapp_id, username=user)
+    services = userapp['services']
+    # short-circuit
+    service_keys = [x['service'] for x in services]
+
+    if service_key not in service_keys:
+        logger.error('Service not found in stack: %s %s-%s - %s' %
+                     (user, userapp_id, service_key, service_keys))
+        return {'error': 'not found'}, 404, jwt.get_token_cookie(user)
+
+    service = [x for x in services if x['service'] == service_key][0]
+
+    if service['status'] == new_status:
+        logger.debug('No-op: Status for %s %s-%s is already %s' %
+                     (user, userapp_id, service_key, new_status))
+        return {'status': service['status']}, 304, jwt.get_token_cookie(user)
+
+    service['status'] = new_status
+
+    # if all services running, set whole app state to running
+    running_services = [x['service'] for x in services if x['status'] == 'running']
+    if len(running_services) == len(services):
+        userapp['status'] = 'running'
+
+    # if all services stopped, set whole app state to stopped
+    stopped_services = [x['service'] for x in services if x['status'] == 'stopped']
+    if len(stopped_services) == len(services):
+        userapp['status'] = 'stopped'
+
+    result = data_store.update_userapp(userapp)
+
+    # naive error handling:
+    #return {'status': new_status}, 200, jwt.get_token_cookie(user)
+
+    if result.modified_count > 0 and result.matched_count == result.modified_count:
+        logger.debug('Status updated successfully: %s %s-%s -> %s' %
+                     (user, userapp_id, service_key, new_status))
+        return {'status': new_status}, 200, jwt.get_token_cookie(user)
+    elif result.matched_count == 0:
+        logger.warning('No matches for status update: (%s, %s, %s, %s)' %
+                       (userapp_id, user, service_key, new_status))
+        return {'status': 'no matches'}, 404, jwt.get_token_cookie(user)
+    elif result.modified_count < result.matched_count:
+        logger.warning('Matches found, but were only partially updated (%d/%d): (%s, %s, %s, %s)' %
+                       (result.modified_count, result.matched_count, userapp_id, user, service_key, new_status))
+        return {'status': 'partial success (%d/%d)' % (result.modified_count, result.matched_count)}, 207, jwt.get_token_cookie(user)
+    elif result.modified_count == 0:
+        logger.warning('Matches found, but none were updated: (%s, %s, %s, %s)' %
+                       (userapp_id, user, service_key, new_status))
+        return {'status': service['status']}, 304, jwt.get_token_cookie(user)
+
+    logger.warning('Something went wrong, and nothing happened: (%s, %s, %s, %s)' %
+                   (userapp_id, user, service_key, new_status))
+    return {'error': 'unknown'}, 500, jwt.get_token_cookie(user)
 
 
 def get_key_from_appspec(appspec):
