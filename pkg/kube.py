@@ -246,10 +246,9 @@ class KubeEventWatcher:
                         pod_ip = ''
                     self.logger.info(' >>>> POD IP: ' + pod_ip)
 
+                    # Caclulate new status/endpoints and write to db
                     service_endpoints = determine_new_endpoints(userapp_id, username, service_key, conditions)
-
                     service_status = determine_new_status(type, phase)
-
                     write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip, service_endpoints)
 
                     logger.debug(
