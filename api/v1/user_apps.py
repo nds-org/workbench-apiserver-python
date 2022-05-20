@@ -81,6 +81,7 @@ def create_userapp(stack, user, token_info):
         service_key = svc['service']
         ssid = '%s-%s' % (stack_id, service_key)
         svc['id'] = ssid
+        svc['endpoints'] = []
 
 
     spec_map = to_spec_map(data_store.fetch_all_appspecs_for_user(user))
@@ -236,7 +237,9 @@ def stop_stack(stack_id, user, token_info):
 
 
 # Returns True if update was successful
-def update_userapp_status(stack_id, service_key, new_status, user, token_info):
+def update_userapp_status(stack_id, service_key, new_status, new_endpoints, user, token_info):
+    logger.info('Got new endpoints: %s' % str(new_endpoints))
+
     userapp_id = stack_id
     userapp = data_store.retrieve_userapp_by_id(userapp_id=userapp_id, username=user)
     services = userapp['services']

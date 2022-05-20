@@ -52,7 +52,8 @@ def post_authenticate(auth):
 
         token_info = jwt.safe_decode(access_token)
         refresh_token_str = tokens['refresh_token']
-        data_store.store_refresh_token(token_info=token_info, refresh_token=refresh_token_str)
+        refr_token_info = jwt.decode_refresh_token(refresh_token_str)
+        data_store.store_refresh_token(token_info=token_info, refr_token_str=refresh_token_str, refr_token_info=refr_token_info)
 
         jwt.update_access_token(username=username, access_token=access_token)
         #    logger.info("Password mismatch detected.. synced shadow account: " % account)
@@ -93,7 +94,9 @@ def refresh_token(user, token_info):
     refresh_token_str = refresh_token['token']
 
     tokens = keycloak.refresh(token_info, refresh_token_str)
-    data_store.store_refresh_token(token_info=token_info, refresh_token=tokens['refresh_token'])
+    new_refr_token_str = tokens['refresh_token']
+    refr_token_info = jwt.safe_decode()
+    data_store.store_refresh_token(token_info=token_info, refr_token_str=new_refr_token_str, refr_token_info=refr_token_info)
 
     # Return new access token
     access_token = tokens['access_tokens']

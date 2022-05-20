@@ -59,6 +59,28 @@ def refresh(token_info, refresh_token):
     return None
 
 
+def service_account_login():
+    try:
+        # format: client_id=workbench-local&grant_type=refresh_token&client_secret=<secret>>&refresh_token=<token>
+        # Refresh uses same Token URL as login, different parameter
+        resp = requests.post(url=config.KC_TOKEN_URL,
+                             headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                             data={
+                                'grant_type': 'client_credentials',
+                                'client_id': config.KEYCLOAK_CLIENT_ID,
+                                'client_secret': config.KEYCLOAK_CLIENT_SECRET
+                             })
+        resp.raise_for_status()
+        tokens = resp.json()
+
+        return {
+            'access_token': tokens['access_token']
+        }
+    except requests.exceptions.RequestException as e:
+        logger.error("Failed to login to Keycloak service account: %s" % e)
+        raise Unauthorized
+
+
 def logout(access_token, refresh_token):
     subject = access_token['sub'] if access_token is not None and 'sub' in access_token else None
     if subject is not None:
@@ -73,6 +95,19 @@ def logout(access_token, refresh_token):
             logger.warning("Failed to logout from Keycloak: %s" % e)
 
 
+# Returns default_cpu_req, default_cpu_lim, default_mem_req, default_mem_lim
+# FIXME: Currently unused
+def get_account_resource_limits(token_info):
+    # TODO: fetch these from keycloak?
+    username = token_info['sub']
+    groups = token_info['roles']['realmAccess']
+    if 'workbench-admin' in groups:
+        return
 
+
+# FIXME: Currently unused
+def get_default_userapp_limits(token_info):
+    # TODO: fetch these from keycloak?
+    username = token_info['sub']
 
 

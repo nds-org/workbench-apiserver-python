@@ -8,7 +8,6 @@ from bson import json_util, ObjectId
 from pymongo.results import DeleteResult, UpdateResult
 
 from pkg import config
-from pkg.auth import jwt
 
 logger = logging.getLogger('pkg.store.mongo')
 
@@ -55,10 +54,10 @@ class MongoStore:
         self.db = self.client[config.MONGO_DB]
 
     # RefreshToken
-    def store_refresh_token(self, token_info, refresh_token) -> object:
+    def store_refresh_token(self, token_info, refr_token_info, refr_token_str) -> object:
         sid = token_info['session_state']
-        refr_token_info = jwt.decode_refresh_token(refresh_token)
-        refr_token_info['token'] = refresh_token
+        #refr_token_info = jwt.decode_refresh_token(refresh_token)
+        refr_token_info['token'] = refr_token_str
         refr_token_info['expiresAt'] = datetime.datetime.fromtimestamp(refr_token_info['exp'])
         upsert = self.db[REFRESHTOKENS_COLLECTION_NAME].update_one({'session_state': sid},
                                                                    {'$set': refr_token_info},

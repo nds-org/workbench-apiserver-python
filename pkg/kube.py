@@ -1,3 +1,4 @@
+import json
 import logging
 import logging.config
 import string
@@ -12,9 +13,10 @@ from kubernetes.client import ApiException
 from requests import HTTPError
 
 from pkg import config
+from pkg.auth import keycloak
 from pkg.config import KUBE_WORKBENCH_NAMESPACE, KUBE_WORKBENCH_RESOURCE_PREFIX
+from pkg.db.datastore import data_store
 from pkg.exceptions import AppSpecNotFoundError
-
 
 CRD_GROUP_NAME = "ndslabs.org"
 CRD_VERSION_V1 = "v1"
@@ -22,7 +24,6 @@ CRD_APPSPECS_PLURAL = "workbenchappspecs"
 CRD_USERAPPS_PLURAL = "workbenchuserapps"
 CRD_APPSPECS_KIND = "WorkbenchAppSpec"
 CRD_USERAPPS_KIND = "WorkbenchUserApp"
-
 
 logger = logging.getLogger('kube')
 
@@ -32,6 +33,7 @@ kubeconfig.load_kube_config()
 custom = client.CustomObjectsApi()
 
 client.api_client.rest.logger.setLevel(logging.WARNING)
+
 
 # TODO: V2 - watch custom resources and react accordingly
 # watched_namespaces = ["test"]
@@ -50,12 +52,129 @@ client.api_client.rest.logger.setLevel(logging.WARNING)
 #        if not count:
 #            w.stop()
 
+def determine_new_endpoints(userapp_id, username, service_key, conditions):
+    # logger.debug('Pod Conditions: %s' % conditions)
+    service_endpoints = []
+    if conditions is not None:
+        # Examine Ready condition and assign endpoints if it is True
+        is_ready = [x.status for x in conditions if x.type == 'Ready']
+        # logger.debug('Is Ready: %s' % is_ready)
+        if len(is_ready) != 1:
+            logger.error('Sanity check: is_ready not found! Skipping..')
+            return service_endpoints
+
+        app_spec = data_store.retrieve_system_appspec_by_key(spec_key=service_key)
+        if app_spec is None:
+            app_spec = data_store.retrieve_user_appspec_by_key(spec_key=service_key, username=username)
+
+        if app_spec is None:
+            logger.warning('Skipping endpoint update. Spec not found anywhere: %s' % service_key)
+        else:
+            logger.debug('App spec found: ' + app_spec['key'])
+            service_ports = app_spec['ports'] if 'ports' in app_spec else []
+            logger.debug('Checking if container is ready... %s' % is_ready)
+            if is_ready[0] == 'True':
+                logger.debug('Container ready, creating endpoints...')
+
+                service_endpoints = []
+                for p in service_ports:
+                    # Only specs that are supposed to be exposed externally
+                    if app_spec['access'] != 'external':
+                        logger.debug('Skipping internal endpoint: ' + app_spec['key'])
+                        continue
+
+                    # Grab what we need from the app_spec to point at the ingress rule for this app
+                    protocol = p['protocol'] if 'protocol' in p else 'tcp'
+                    path = p['path'] if 'path' in p else '/'
+                    port = p['port'] if 'port' in p else ''
+                    nodePort = p['nodePort'] if 'nodePort' in p else ''
+
+                    # Port is not typically used (possibly in dev, but even then probably not)
+                    actual_port = nodePort if nodePort else port if port else ''
+
+                    # Use username+appId+portnumber for ingress host
+                    prefix = get_resource_name(userapp_id, service_key)
+
+                    # TODO: Handle multiple ports? e.g. rabbitmq 5672 + 15672?
+                    #  if actual_port is '' else get_resource_name(username, userapp_id, str(actual_port))
+
+                    host = '%s.%s' % (prefix, config.DOMAIN)
+
+                    endpoint = {
+                        'host': host,
+                        'protocol': protocol,
+                        'path': path,
+                        # 'port': ':',       # unused
+                        # 'nodePort': ':',   # unused
+                        'url': '%s://%s%s' % (protocol, host, path),
+                    }
+
+                    logger.debug('Adding endpoint: %s' % endpoint)
+
+                    service_endpoints.append(endpoint)
+            else:
+                # If Pod not ready, don't expose endpoints yet
+                logger.debug('Container not yet ready, skipping endpoint creation...')
+                service_endpoints = []
+
+    return service_endpoints
+
+def determine_new_status(type, phase):
+    service_status = phase  # default is no phase change
+
+    # TODO: Update stack service phase according to phase/type
+    if phase == 'Pending':  # TODO: initial scheduling phase
+        service_status = 'initializing'
+    elif phase == 'Error':  # TODO: errors at startup/runtime
+        service_status = 'error'
+    elif phase == 'Running' and type != 'DELETED':  # TODO: errors at startup/runtime
+        service_status = 'running'
+    elif type == 'ADDED':  # TODO: 'starting' incremental phase updates
+        service_status = 'created'
+    elif type == 'DELETED':  # TODO: 'stopping' incremental phase updates
+        service_status = 'stopped'
+    elif type == 'MODIFIED':  # TODO: granular incremental phase updates (conditions?)
+        service_status = 'starting'
+
+    return service_status
+
+
+def write_status_and_endpoints(userapp_id, username, service_key, service_status, service_endpoints):
+    userapp = data_store.retrieve_userapp_by_id(userapp_id=userapp_id, username=username)
+    if userapp is not None:
+        services = userapp['services']
+        for service in services:
+            if service['service'] == service_key:
+                ssid = '%s-%s' % (userapp_id, service_key)
+                logger.debug('%s -> %s (owned by %s)' % (ssid, service_status, username))
+
+                service['status'] = service_status
+                service['endpoints'] = service_endpoints
+
+        # if all services running, set whole app state to running
+        running_services = [x['service'] for x in services if x['status'] == 'running']
+        if len(running_services) == len(services):
+            userapp['status'] = 'running'
+            logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'running', username))
+
+        # if all services stopped, set whole app state to stopped
+        stopped_services = [x['service'] for x in services if x['status'] == 'stopped']
+        if len(stopped_services) == len(services):
+            userapp['status'] = 'stopped'
+            logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'stopped', username))
+
+        # Assume success?
+        result = data_store.update_userapp(userapp)
+    else:
+        logger.warning('Unable to update status and endpoints: Userapp not found: %s %s' % (username, userapp_id))
+
 
 class KubeEventWatcher:
 
     def __init__(self):
         self.logger = logging.getLogger('kube-event-watcher')
         self.thread = threading.Thread(target=self.run, name='kube-event-watcher', daemon=True)
+        self.stream = None
         logger.info('Starting Kube event watcher')
         self.thread.start()
 
@@ -82,17 +201,19 @@ class KubeEventWatcher:
         }
 
         while True:
+            time.sleep(1)
             try:
-                stream = w.stream(func=v1.list_pod_for_all_namespaces, resource_version=resource_version)
+                # Resource version is used to keep track of stream progress (in case of resume)
+                self.stream = w.stream(func=v1.list_pod_for_all_namespaces, resource_version=resource_version, timeout_seconds=0)
                 resource_version = v1.list_pod_for_all_namespaces().metadata.resource_version
 
-                # Parse events in the stream for Pod status updates
-                for event in stream:
+                # Parse events in the stream for Pod phase updates
+                for event in self.stream:
                     # Skip Pods in ignored namespaces
                     if event['object'].metadata.namespace in ignored_namespaces:
                         continue
 
-                    #logger.debug('Received pod event: %s' % str(event['object'].status))
+                    # logger.debug('Received pod event: %s' % str(event['object'].phase))
 
                     # Examine labels, ignore if not workbench app
                     #logger.debug('Event recv\'d: %s' % event)
@@ -113,64 +234,35 @@ class KubeEventWatcher:
                         continue
 
                     userapp_id = segments[0]
+                    username = labels['user']
                     service_key = '-'.join(segments[1:-2])
 
                     type = event['type']
-                    status = event['object'].status.phase
+                    phase = event['object'].status.phase
+                    conditions = event['object'].status.conditions
 
-                    self.logger.info('UserappId=%s  ServiceKey=%s  type=%s  status=%s' % (userapp_id, service_key, type, status))
+                    service_endpoints = determine_new_endpoints(userapp_id, username, service_key, conditions)
 
-                    new_status = status   # default is no status change
+                    service_status = determine_new_status(type, phase)
 
-                    # TODO: Update stack service status according to phase/type
-                    if status == 'Pending':   # TODO: initial scheduling phase
-                        new_status = 'initializing'
-                    elif status == 'Error':  # TODO: errors at startup/runtime
-                        new_status = 'error'
-                    elif status == 'Running' and type != 'DELETED':  # TODO: errors at startup/runtime
-                        new_status = 'running'
-                    elif type == 'ADDED':  # TODO: 'starting' incremental status updates
-                        new_status = 'created'
-                    elif type == 'DELETED':  # TODO: 'stopping' incremental status updates
-                        new_status = 'stopped'
-                    elif type == 'MODIFIED':  # TODO: granular incremental status updates (conditions?)
-                        new_status = 'starting'
+                    write_status_and_endpoints(userapp_id, username, service_key, service_status, service_endpoints)
 
-                    # FIXME: import mongo data_store here instead?
-                    resp = requests.put((config.CALLBACK_URL_TEMPLATE + '?service_key=%s&new_status=%s') % (userapp_id, service_key, new_status),
-                        headers={
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer %s' % config.CALLBACK_SERVICE_ACCOUNT_JWT
-                        })
-                    resp.raise_for_status()
-
-            except HTTPError as e:
-                logger.error("Failed to update service status: " + str(e))
-                continue
+                    logger.debug(
+                        'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s' % (userapp_id, service_key, type, phase, service_status))
             except ApiException as e:
                 logger.error("Connection to kube API failed: " + str(e))
                 time.sleep(2)
                 continue
 
-                    #else:
-                    #    self.logger.debug('Ignoring event not meant for Pods: %s' % event)
-
-                    # if event["object"].status.phase == "Running":
-                    #     watch.stop()
-                    #     end_time = time.time()
-                    #     full_name = event["object"].metadata.name
-                    #     namespace = event["object"].metadata.namespace
-                    #     #logger.info("%s started in %s in %0.2f sec", full_name, namespace, end_time - start_time)
-                    #     return
-                    # # event.type: ADDED, MODIFIED, DELETED
-                    # if event["type"] == "DELETED":
-                    #     # Pod was deleted while we were waiting for it to start.
-                    #     logger.debug("%s deleted before it started", full_name)
-                    #     w.stop()
-                    #     return
-
     def is_alive(self):
         return self.thread.is_alive()
+
+    def close(self):
+        if self.thread is None:
+            return
+        if self.thread.is_alive():
+            self.thread.join(timeout=3)
+            self.thread = None
 
 
 def generate_random_password(length=16):
@@ -288,7 +380,8 @@ def create_userapp(username, userapp, spec_map):
         # Create one pod container per-stack service
         containers.append({
             'name': stack_service_id,
-            'resourceLimits': stack_service['resourceLimits'] if 'resourceLimits' in stack_service else app_spec['resourceLimits'] if 'resourceLimits' in app_spec else {},
+            'resourceLimits': stack_service['resourceLimits'] if 'resourceLimits' in stack_service else app_spec[
+                'resourceLimits'] if 'resourceLimits' in app_spec else {},
             'command': stack_service['command'] if 'command' in stack_service else None,
             'image': stack_service['image'] if 'image' in stack_service else app_spec['image'],
             'configmap': resource_name,  # not currently used
@@ -560,7 +653,8 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
                     client.V1ContainerPort(
                         name='%s%s' % (port['protocol'] if 'protocol' in port else 'tcp', str(port['port'])),
                         container_port=port['port'],
-                        protocol='TCP'  # port['protocol'].upper() if 'protocol' in port and port['protocol'] != 'http' else
+                        protocol='TCP'
+                        # port['protocol'].upper() if 'protocol' in port and port['protocol'] != 'http' else
                     ) for port in container['ports']
                 ]
             ) for container in containers
@@ -643,7 +737,8 @@ def create_service(service_name, service_ports, labels, **kwargs):
                     client.V1ServicePort(
                         name=port['name'] if 'name' in port else None,
                         port=int(port['port']),
-                        protocol='TCP'  # port['protocol'].upper() if 'protocol' in port and port['protocol'] != 'http' else
+                        protocol='TCP'
+                        # port['protocol'].upper() if 'protocol' in port and port['protocol'] != 'http' else
                     ) for port in service_ports
                 ]
             )
@@ -711,7 +806,7 @@ def create_ingress(ingress_name, ingress_hosts, labels, **kwargs):
             ])
         ))
         logger.debug("Created ingress resource: " + str(ingress))
-        #for i in ret.items:
+        # for i in ret.items:
         #    logger.debug("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
         return ingress
 
@@ -742,7 +837,7 @@ def get_pods():
     ret = v1.list_pod_for_all_namespaces(watch=False)
     for i in ret.items:
         print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
-    #return { 'name': ingress_name, 'namespace': ingress_namespace }, 201
+    # return { 'name': ingress_name, 'namespace': ingress_namespace }, 201
 
 
 #
@@ -769,9 +864,9 @@ def create_network_policy(policy_name, **kwargs):
     ingress_len = len(ingress)
     policy_types = \
         ["Ingress", "Egress"] if ingress_len > 0 and egress_len > 0 else \
-        ["Ingress"] if ingress_len > 0 and egress_len == 0 else \
-        ["Egress"] if egress_len > 0 and ingress_len == 0 else \
-        []
+            ["Ingress"] if ingress_len > 0 and egress_len == 0 else \
+                ["Egress"] if egress_len > 0 and ingress_len == 0 else \
+                    []
 
     if not policy_types:
         logger.warning("Warning: Creating NetworkPolicy with empty policy_types")
@@ -780,25 +875,25 @@ def create_network_policy(policy_name, **kwargs):
         logger.warning("Warning: Creating NetworkPolicy that would operate on all resources")
 
     policy = networkingv1.create_namespaced_network_policy(namespace=policy_namespace, body=client.V1NetworkPolicy(
-            api_version='v1',
-            kind='NetworkPolicy',
-            metadata=client.V1ObjectMeta(
-                name=policy_name,
-                namespace=policy_namespace,
-                annotations=policy_annotations,
-                labels=policy_labels
-            ),
-            spec=client.V1NetworkPolicySpec(
-                egress=egress,
-                ingress=ingress,
-                policy_types=policy_types,
-                pod_selector=client.V1LabelSelector(
-                    match_expressions=match_expressions,
-                    match_labels=match_labels
-                )
+        api_version='v1',
+        kind='NetworkPolicy',
+        metadata=client.V1ObjectMeta(
+            name=policy_name,
+            namespace=policy_namespace,
+            annotations=policy_annotations,
+            labels=policy_labels
+        ),
+        spec=client.V1NetworkPolicySpec(
+            egress=egress,
+            ingress=ingress,
+            policy_types=policy_types,
+            pod_selector=client.V1LabelSelector(
+                match_expressions=match_expressions,
+                match_labels=match_labels
             )
         )
     )
+                                                           )
     return policy
 
 
@@ -834,12 +929,12 @@ def create_resource_quota(quota_name, hard_quotas, **kwargs):
             ),
             spec=client.V1ResourceQuotaSpec(
                 scope_selector=client.V1ScopeSelector(
-                  match_expressions=[
-                      # TODO: Selector for namespace and/or user labels
-                      #client.V1ScopedResourceSelectorRequirement(
-                          # scop
-                      #)
-                  ]
+                    match_expressions=[
+                        # TODO: Selector for namespace and/or user labels
+                        # client.V1ScopedResourceSelectorRequirement(
+                        # scop
+                        # )
+                    ]
                 ),
                 hard=hard_quotas
             )
@@ -901,7 +996,7 @@ def delete_custom_app_spec(key):
 def list_custom_user_apps(namespace):
     custom = client.CustomObjectsApi()
     return custom.list_namespaced_custom_object(CRD_GROUP_NAME, CRD_VERSION_V1, namespace, CRD_USERAPPS_PLURAL)
-    #return custom.list_namespaced_custom_object(group=CRD_GROUP_NAME, version=CRD_VERSION_V1,
+    # return custom.list_namespaced_custom_object(group=CRD_GROUP_NAME, version=CRD_VERSION_V1,
     #                                            plural=CRD_USERAPPS_PLURAL, namespace=namespace)
 
 

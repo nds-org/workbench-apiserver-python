@@ -30,6 +30,8 @@ def update_access_token(username, access_token):
 def get_token_cookie(username, access_token_str=None):
     if access_token_str is None:
         access_token_str = get_access_token(username)
+    if access_token_str is None:
+        return {}
     return {'Set-Cookie': SET_COOKIE_STR % access_token_str}
 
 
@@ -41,8 +43,6 @@ def clear_token_cookie(username):
 def safe_decode(jwt_token):
     try:
         return decode(jwt_token)
-    except ExpiredSignatureError as e:
-        logger.warning('Token is expired - attempting refresh: %s' % e)
     except (JWTError, JWSError, JWKError) as e:
         logger.error('Failed to decode JWT: %s' % e)
 
@@ -189,7 +189,8 @@ def validate_token(token, required_scopes):
         # connexion.request.cookies.add('token', new_access_token)
 
         # Store new refresh token
-        data_store.store_refresh_token(token_info=new_token_info, refresh_token=new_refr_token)
+        new_refr_token_info = decode_refresh_token(new_refr_token)
+        data_store.store_refresh_token(token_info=new_token_info, refr_token_str=new_refr_token, refr_token_info=new_refr_token_info)
         update_access_token(username=new_token_info['sub'], access_token=new_access_token)
 
         logger.info('Token refreshed - session renewed: %s' % new_token_info['session_state'])

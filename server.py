@@ -1,10 +1,11 @@
 import logging
-import os
 
 import connexion
+
 from pkg import config, kube
 
 from pkg.openapi.resolver import OperationResolver
+
 
 logger = logging.getLogger("server")
 
@@ -38,4 +39,7 @@ if __name__ == '__main__':
                     strict_validation=True)
 
     watcher = kube.KubeEventWatcher()
-    app.run(port=5000, host='0.0.0.0', server='flask', debug=debug)
+    try:
+        app.run(port=5000, host='0.0.0.0', server='flask', debug=debug)
+    finally:
+        watcher.close()

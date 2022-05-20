@@ -560,41 +560,6 @@ paths:
       responses:
         '200':
           description: OK
-  '/stacks/{stack_id}/status':
-    parameters:
-      - $ref: '#/parameters/stack_id'
-    put:
-      deprecated: true
-      security:
-        - Bearer: []
-        - Cookie: []
-        - OAuth2: []
-      tags:
-        - user app
-      operationId: 'update_userapp_status'
-      x-swagger-router-controller: 'api.v1.user_apps'
-      parameters:
-        - name: new_status
-          description: New stack service status
-          type: string
-          in: query
-          required: true
-        - name: service_key
-          description: Key of the service to change within the stack
-          type: string
-          in: query
-          required: false
-      description: |
-        Update the status of a stack service
-      responses:
-        '200':
-          description: OK
-        '207':
-          description: Partial success
-        '304':
-          description: Not modified
-        '404':
-          description: Not found
   '/logs/{stack_service_id}':
     parameters:
       - $ref: '#/parameters/stack_service_id'
