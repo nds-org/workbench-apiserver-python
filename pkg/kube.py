@@ -139,7 +139,7 @@ def determine_new_status(type, phase):
     return service_status
 
 
-def write_status_and_endpoints(userapp_id, username, service_key, service_status, service_endpoints):
+def write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip, service_endpoints):
     userapp = data_store.retrieve_userapp_by_id(userapp_id=userapp_id, username=username)
     if userapp is not None:
         services = userapp['services']
@@ -148,6 +148,7 @@ def write_status_and_endpoints(userapp_id, username, service_key, service_status
                 ssid = '%s-%s' % (userapp_id, service_key)
                 logger.debug('%s -> %s (owned by %s)' % (ssid, service_status, username))
 
+                service['internalIP'] = pod_ip
                 service['status'] = service_status
                 service['endpoints'] = service_endpoints
 
@@ -240,12 +241,16 @@ class KubeEventWatcher:
                     type = event['type']
                     phase = event['object'].status.phase
                     conditions = event['object'].status.conditions
+                    pod_ip = event['object'].status.pod_ip
+                    if pod_ip is None:
+                        pod_ip = ''
+                    self.logger.info(' >>>> POD IP: ' + pod_ip)
 
                     service_endpoints = determine_new_endpoints(userapp_id, username, service_key, conditions)
 
                     service_status = determine_new_status(type, phase)
 
-                    write_status_and_endpoints(userapp_id, username, service_key, service_status, service_endpoints)
+                    write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip, service_endpoints)
 
                     logger.debug(
                         'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s' % (userapp_id, service_key, type, phase, service_status))
