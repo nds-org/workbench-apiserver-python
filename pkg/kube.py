@@ -1,19 +1,18 @@
-import json
 import logging
 import logging.config
 import string
 import random
+import sys
 import time
-
-import requests
 import threading
 
+import urllib3
 from kubernetes import watch, client, config as kubeconfig
 from kubernetes.client import ApiException
 from requests import HTTPError
 
 from pkg import config
-from pkg.auth import keycloak
+from pkg.auth import jwt
 from pkg.config import KUBE_WORKBENCH_NAMESPACE, KUBE_WORKBENCH_RESOURCE_PREFIX
 from pkg.db.datastore import data_store
 from pkg.exceptions import AppSpecNotFoundError
@@ -118,6 +117,7 @@ def determine_new_endpoints(userapp_id, username, service_key, conditions):
                 service_endpoints = []
 
     return service_endpoints
+
 
 def determine_new_status(type, phase):
     service_status = phase  # default is no phase change
@@ -253,8 +253,12 @@ class KubeEventWatcher:
 
                     logger.debug(
                         'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s' % (userapp_id, service_key, type, phase, service_status))
+            except urllib3.exceptions.ProtocolError as e:
+                logger.error('Connection to Kube API has been lost. Killing application.')
+                sys.exit(1)
             except ApiException as e:
-                logger.error("Connection to kube API failed: " + str(e))
+                if e.status != 410:
+                    logger.error("Connection to kube API failed: " + str(e))
                 time.sleep(2)
                 continue
 
@@ -293,9 +297,12 @@ def get_resource_namespace(username):
     if is_single_namespace():
         return KUBE_WORKBENCH_NAMESPACE
     else:
+        # TODO: Prefix with KUBE_WORKBENCH_RESOURCE_PREFIX?
+        # TODO: better to use KUBE_WORKBENCH_NAMESPACE?
         return username
 
 
+# TODO: Replace with explicit boolean
 def is_single_namespace():
     return True if config.KUBE_WORKBENCH_NAMESPACE is not None and config.KUBE_WORKBENCH_NAMESPACE != '' else False
 
@@ -340,8 +347,10 @@ def init_user(username):
         # Ignore conflict - creation of these resources is idempotent
         if e.status != 409:
             raise e
+
     # create_resource_quota(namespace=namespace, quota_name=username, hard_quotas=DEFAULT_DEV_RESOURCE_QUOTA)
     # create_network_policy(namespace=username, policy_name=username)
+    # TODO: create_service_account()
 
 
 # Creates the Kubernetes resources related to a userapp
@@ -351,6 +360,7 @@ def create_userapp(username, userapp, spec_map):
     ingress_hosts = {}
     userapp_id = userapp['id']
     userapp_key = userapp['key']
+    should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else config.KUBE_WORKBENCH_SINGLEPOD
 
     labels = {
         'manager': 'workbench',
@@ -381,8 +391,8 @@ def create_userapp(username, userapp, spec_map):
                 # generate password if none is provided
                 configmap_data[cfg.name] = generate_random_password()
 
-        # Create one pod container per-stack service
-        containers.append({
+        # Create one container per-stack service
+        container = {
             'name': stack_service_id,
             'resourceLimits': stack_service['resourceLimits'] if 'resourceLimits' in stack_service else app_spec[
                 'resourceLimits'] if 'resourceLimits' in app_spec else {},
@@ -392,7 +402,9 @@ def create_userapp(username, userapp, spec_map):
             'prestop': stack_service['prestop'] if 'prestop' in stack_service else None,
             'poststart': stack_service['poststart'] if 'poststart' in stack_service else None,
             'ports': service_ports,
-        })
+        }
+
+        containers.append(container)
 
         # Create one Kubernetes service per-stack service
         create_service(service_name=resource_name,
@@ -403,18 +415,62 @@ def create_userapp(username, userapp, spec_map):
             # Create one Kubernetes configmap per-stack service
             create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
 
+        if not should_run_as_single_pod:
+            # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
+            create_deployment(deployment_name=get_resource_name(userapp_id, userapp_key, service_key),
+                              namespace=namespace,
+                              replicas=0,
+                              labels=labels,
+                              containers=[container])
+
     # Create one ingress per-stack
     create_ingress(ingress_name=get_resource_name(userapp_id, userapp_key),
                    namespace=namespace, labels=labels,
                    ingress_hosts=ingress_hosts)
 
-    # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
-    create_deployment(deployment_name=get_resource_name(userapp_id, userapp_key),
-                      namespace=namespace,
-                      replicas=0,
-                      labels=labels,
-                      containers=containers)
+    if should_run_as_single_pod:
+        # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
+        create_deployment(deployment_name=get_resource_name(userapp_id, userapp_key),
+                          namespace=namespace,
+                          replicas=0,
+                          labels=labels,
+                          containers=containers)
 
+
+def update_userapp_replicas(username, userapp_id, replicas):
+    userapp = data_store.retrieve_userapp_by_id(userapp_id=userapp_id, username=username)
+    if userapp is None:
+        return False
+    spec_key = userapp['key']
+
+    name = get_resource_name(userapp_id, spec_key)
+    namespace = get_resource_namespace(username)
+    result = patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
+
+    if result is None:
+        return False
+
+    return True
+
+
+def patch_scale_userapp(username, userapp, replicas):
+
+
+    # FIXME:
+    userapp_id = userapp['id']
+    namespace = get_resource_namespace(username)
+
+    should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else config.KUBE_WORKBENCH_SINGLEPOD
+    if should_run_as_single_pod:
+        deployment_name = get_resource_name(userapp_id, userapp['key'])
+        patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas)
+    else:
+        for stack_service in userapp['services']:
+            service_key = stack_service['service']
+            name = get_resource_name(userapp_id, userapp['key'], service_key)
+            patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
+
+    return True
 
 # Cleans up the Kubernetes resources related to a userapp
 def destroy_userapp(username, userapp):
@@ -422,15 +478,21 @@ def destroy_userapp(username, userapp):
     userapp_key = userapp['key']
     name = get_resource_name(userapp_id, userapp_key)
     namespace = get_resource_namespace(username)
-    delete_deployment(name=name, namespace=namespace)
     delete_ingress(name=name, namespace=namespace)
     # TODO: networkpolicy? (currently unused)
+
+    should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else True
+    if should_run_as_single_pod:
+        delete_deployment(name=name, namespace=namespace)
+
 
     for stack_service in userapp['services']:
         service_key = stack_service['service']
         name = get_resource_name(userapp_id, userapp_key, service_key)
-        delete_configmap(name=name, namespace=namespace)
+        if not should_run_as_single_pod:
+            delete_deployment(name=name, namespace=namespace)
         delete_service(name=name, namespace=namespace)
+        delete_configmap(name=name, namespace=namespace)
 
     return
 

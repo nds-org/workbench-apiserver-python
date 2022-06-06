@@ -55,22 +55,6 @@ def to_spec_map(specs, existing_map=None):
     return spec_map
 
 
-def update_userapp_replicas(username, userapp_id, replicas):
-    userapp = data_store.retrieve_userapp_by_id(userapp_id=userapp_id, username=username)
-    if userapp is None:
-        return False
-    spec_key = userapp['key']
-
-    name = kube.get_resource_name(userapp_id, spec_key)
-    namespace = kube.get_resource_namespace(username)
-    result = kube.patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
-
-    if result is None:
-        return False
-
-    return True
-
-
 def create_userapp(stack, user, token_info):
     stack['creator'] = user
     stack_id = generate_unique_id(user)
@@ -204,11 +188,17 @@ def start_stack(stack_id, user, token_info):
     if userapp['creator'] != user:
         return {'error': 'Only the owner may launch a userapp'}, 403, jwt.get_token_cookie(user)
 
-    userapp['status'] = 'starting'
+    status = userapp['status']
+    if status != 'starting' and status != 'running' and status != 'created' and status != 'initializing':
+        userapp['status'] = 'starting'
+
+    #kube.patch_scale_userapp(username=user, userapp=userapp, replicas=1)
+    #data_store.update_userapp(userapp)
+    #return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
 
     # TODO: Eventually, Pod is Running and event watchers
     #    should update userapp state to STARTED
-    if update_userapp_replicas(username=user, userapp_id=stack_id, replicas=1):
+    if kube.patch_scale_userapp(username=user, userapp=userapp, replicas=1):
         data_store.update_userapp(userapp)
         return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
     else:
@@ -224,11 +214,17 @@ def stop_stack(stack_id, user, token_info):
     if userapp['creator'] != user:
         return {'error': 'Only the owner may shutdown a userapp'}, 403, jwt.get_token_cookie(user)
 
-    userapp['status'] = 'stopping'
+    status = userapp['status']
+    if status != 'stopping' and status != 'stopped':
+         userapp['status'] = 'stopping'
 
-    # TODO: Eventually, Pod is gone and event watchers
+    #kube.patch_scale_userapp(username=user, userapp=userapp, replicas=0)
+    #data_store.update_userapp(userapp)
+    #return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
+
+    # Eventually, Pod is Running and event watchers
     #    should update userapp state to STOPPED
-    if update_userapp_replicas(username=user, userapp_id=stack_id, replicas=0):
+    if kube.patch_scale_userapp(username=user, userapp=userapp, replicas=0):
         data_store.update_userapp(userapp)
         return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
     else:

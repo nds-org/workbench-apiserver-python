@@ -1121,6 +1121,8 @@ definitions:
         default: {}
       internalIP:
         type: string
+      singlePod:
+        type: boolean
       readinessProbe:
         $ref: '#/definitions/ReadyProbe'
       imageTag:

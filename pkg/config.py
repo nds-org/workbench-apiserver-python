@@ -55,7 +55,8 @@ CALLBACK_URL_TEMPLATE = os.getenv('CALLBACK_URL_TEMPLATE', CALLBACK_HOST + '/api
 
 # v2?
 KUBE_WORKBENCH_RESOURCE_PREFIX = ''
-KUBE_WORKBENCH_NAMESPACE = 'workbench'
+KUBE_WORKBENCH_NAMESPACE = os.getenv('KUBE_WORKBENCH_NAMESPACE', 'workbench')
+KUBE_WORKBENCH_SINGLEPOD = os.getenv('KUBE_WORKBENCH_SINGLEPOD', 'true').lower() in ('true', '1', 't')
 KUBE_PVC_STORAGECLASS = os.getenv('hostpath', None)
 
 SWAGGER_URL = os.getenv('SWAGGER_URL', 'openapi/swagger-v1.yml')
