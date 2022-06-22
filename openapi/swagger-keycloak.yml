@@ -11,12 +11,10 @@ host: localhost:5000
 basePath: /api
 securityDefinitions:
   Bearer:
-    x-apikeyInfoFunc: 'pkg.keycloak.apikey_auth'
     type: apiKey
     name: X-API-KEY
     in: header
   Cookie:
-    x-apikeyInfoFunc: 'pkg.keycloak.cookie_token_auth'
     type: apiKey
     name: Cookie
     in: header

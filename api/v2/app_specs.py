@@ -2,11 +2,9 @@ import logging
 
 from kubernetes.client import ApiValueError, ApiException
 
-from helper import etcdClient
 
 from bson import ObjectId, json_util
 
-from pkg.mongo import get_mongo_client, parse_json
 
 import json
 import connexion
@@ -140,17 +138,17 @@ SYS_CATALOG_BASE_PATH = config.ETCD_BASE_PATH + SERVICES_SUFFIX
 
 
 def run():
-    args = connexion.request.args
+    args = connexion.request.cookies   #.args
     catalog = args.get('catalog')
     logging.info("Get services with catalog - "+catalog)
 
     services = []
-    if catalog == 'system':
-        services = etcdClient.getSystemServices()
-    elif catalog == 'user':
-        services = etcdClient.getUserServices()
-    else:  # catalog == all or others
-        services = etcdClient.getAllServices()
+    #if catalog == 'system':
+        # services = etcdClient.getSystemServices()
+    #elif catalog == 'user':
+        # services = etcdClient.getUserServices()
+    #else:  # catalog == all or others
+        # services = etcdClient.getAllServices()
 
     if 'x_access_token' in connexion.request.headers:
         token = connexion.request.headers['X-Access-Token']
@@ -163,7 +161,7 @@ def run():
 
 
 def get(service_id):
-    service = etcdClient.getServiceWithId(service_id)
+    service = '' # etcdClient.getServiceWithId(service_id)
 
     if service == '':
         return '', 204

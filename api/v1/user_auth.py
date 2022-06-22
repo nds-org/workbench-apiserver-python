@@ -41,9 +41,8 @@ def new_user(username, password, email, name):
 def post_authenticate(auth):
     # req_json = connexion.request.json
     # auth_body = req_json['auth']
-    auth_body = auth['auth']
-    username = auth_body['username']
-    password = auth_body['password']
+    username = auth['username']
+    password = auth['password']
 
     try:
         tokens = keycloak.login(username, password)
@@ -82,7 +81,7 @@ def delete_authenticate():
     jwt.update_access_token(username=username, access_token=None)
 
     # Invalidate any cookies
-    return 204, jwt.clear_token_cookie()
+    return 204, jwt.clear_token_cookie(username=username)
 
 
 def refresh_token(user, token_info):

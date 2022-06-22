@@ -47,5 +47,6 @@
   "status": "stopped",
   "createdTime": 0,
   "updateTime": 0,
-  "secure": false
+  "secure": false,
+  "singlePod": false
 }

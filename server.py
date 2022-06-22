@@ -1,6 +1,7 @@
 import logging
 
 import connexion
+from flask_cors import CORS
 
 from pkg import config, kube
 
@@ -37,6 +38,8 @@ if __name__ == '__main__':
                     resolver=OperationResolver('api'),
                     arguments={'title': 'PYNDSLABS.V1'}, resolver_error=501,
                     strict_validation=True)
+
+    CORS(app.app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 
     watcher = kube.KubeEventWatcher()
     try:

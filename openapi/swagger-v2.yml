@@ -128,6 +128,23 @@ components:
           type: integer
       required: ["email", "namespace", "name"]
     AppSpec:
+      x-groupName: "ndslabs.org"
+      x-version: "v1"
+      x-scope: "Cluster"
+      x-shortNames:
+        - workbenchspec
+        - workbenchspecs
+        - wbappspec
+        - wbappspecs
+        - appspec
+        - appspecs
+        - wbspec
+        - wbspecs
+        - spec
+        - specs
+      x-singular: "workbenchappspec"
+      x-plural: "workbenchappspecs"
+      x-kind: "WorkbenchAppSpec"
       type: object
       properties:
         id:
@@ -315,6 +332,23 @@ components:
 
     # Users can add applications based on specs from the catalog
     UserApp:
+      x-groupName: "ndslabs.org"
+      x-version: "v1"
+      x-plural: "workbenchuserapps"
+      x-singular: "workbenchuserapp"
+      x-kind: "WorkbenchUserApp"
+      x-scope: "Namespaced"
+      x-shortNames:
+        - workbenchapp
+        - workbenchapps
+        - wbuserapp
+        - wbuserapps
+        - userapp
+        - userapps
+        - wbapp
+        - wbapps
+        - app
+        - apps
       type: object
       properties:
         id:
@@ -425,7 +459,8 @@ paths:
     get:
       tags:
         - system
-      operationId: "getVersion"
+      operationId: 'get_version'
+      x-swagger-router-controller: 'api.v2.system'
       summary: Get the current server version info
       description: |
         Retrieve information about the server's current version
@@ -442,7 +477,8 @@ paths:
 
   /vocabularies:
     get:
-      operationId: 'listVocabularies'
+      operationId: 'list_vocabularies'
+      x-swagger-router-controller: 'api.v2.vocabulary'
       tags:
         - vocabulary
       summary: Retrieve a list of all vocabularies
@@ -462,7 +498,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/vocab-name'
     get:
-      operationId: 'getVocabularyByName'
+      operationId: 'get_vocabulary_by_name'
+      x-swagger-router-controller: 'api.v2.vocabulary'
       tags:
         - vocabulary
       summary: Retrieve a single vocabulary and all of its terms
@@ -478,7 +515,8 @@ paths:
         '404':
           description: Not found
     put:
-      operationId: 'updateVocabulary'
+      operationId: 'update_vocabulary'
+      x-swagger-router-controller: 'api.v2.vocabulary'
       tags:
         - vocabulary
       summary: Create a new vocabulary or replace the list of terms in an existing vocabulary
@@ -507,7 +545,8 @@ paths:
               items:
                 $ref: '#/components/schemas/VocabTerm'
     delete:
-      operationId: 'deleteVocabulary'
+      operationId: 'delete_vocabulary'
+      x-swagger-router-controller: 'api.v2.vocabulary'
       tags:
         - vocabulary
       summary: Delete an entire vocabulary
@@ -532,7 +571,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/vocab-name'
     get:
-      operationId: 'getVocabularyTermsByName'
+      operationId: 'get_vocabulary_terms_by_name'
+      x-swagger-router-controller: 'api.v2.vocabulary'
       tags:
         - vocabulary
       summary: Retrieve a single vocabulary and all of its terms
@@ -550,7 +590,8 @@ paths:
         '404':
           description: Not found
     post:
-      operationId: 'createVocabularyTerm'
+      operationId: 'create_vocabulary_term'
+      x-swagger-router-controller: 'api.v2.vocabulary'
       tags:
         - vocabulary
       summary: Add a new term to a vocabulary
@@ -586,7 +627,8 @@ paths:
       - $ref: '#/components/parameters/vocab-name'
       - $ref: '#/components/parameters/term-id'
     get:
-      operationId: 'getVocabularyTermById'
+      operationId: 'get_vocabulary_term_by_id'
+      x-swagger-router-controller: 'api.v2.vocabulary'
       tags:
         - vocabulary
       summary: Retrieve a single vocabulary term
@@ -602,7 +644,8 @@ paths:
         '404':
           description: Not found
     put:
-      operationId: 'updateVocabularyTerm'
+      operationId: 'update_vocabulary_term'
+      x-swagger-router-controller: 'api.v2.vocabulary'
       tags:
         - vocabulary
       summary: Update a term within a vocabulary
@@ -632,7 +675,8 @@ paths:
             schema:
               $ref: '#/components/schemas/VocabTerm'
     delete:
-      operationId: 'deleteVocabularyTerm'
+      operationId: 'delete_vocabulary_term'
+      x-swagger-router-controller: 'api.v2.vocabulary'
       tags:
         - vocabulary
       summary: Delete a term from a vocabulary
@@ -661,7 +705,8 @@ paths:
 
   /users:
     get:
-      operationId: 'listUserAccounts'
+      operationId: 'list_user_accounts'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       tags:
         - user
       summary: Retrieve a list of user accounts
@@ -681,7 +726,8 @@ paths:
         '403':
           description: Forbidden
     post:
-      operationId: 'createUserAccount'
+      operationId: 'create_user_account'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       tags:
         - user
       summary: Add a new user account (admin only)
@@ -709,7 +755,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/username'
     get:
-      operationId: 'getUserAccountByUsername'
+      operationId: 'get_user_account_by_username'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       tags:
         - user
       summary: Retrieve a user account
@@ -729,7 +776,8 @@ paths:
         '404':
           description: Not found
     put:
-      operationId: 'updateUserAccount'
+      operationId: 'update_user_account'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       tags:
         - user
       summary: Update user account information
@@ -758,7 +806,8 @@ paths:
             schema:
               $ref: '#/components/schemas/UserAccount'
     delete:
-      operationId: 'deleteUserAccount'
+      operationId: 'delete_user_account'
+      x-swagger-router-controller: 'api.v2.user_accounts'
       tags:
         - user
       summary: Delete a user account
@@ -780,7 +829,8 @@ paths:
 
   /specs:
     get:
-      operationId: 'listAppSpecs'
+      operationId: 'list_system_specs'
+      x-swagger-router-controller: 'api.v2.app_specs'
       tags:
         - app spec
       summary: Retrieve a list of system-level Application Specs
@@ -796,7 +846,8 @@ paths:
                 items:
                   $ref: '#/components/schemas/AppSpec'
     post:
-      operationId: 'createAppSpec'
+      operationId: 'create_system_spec'
+      x-swagger-router-controller: 'api.v2.app_specs'
       tags:
         - app spec
       summary: Add a new system-level Application Spec
@@ -823,7 +874,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/spec-id'
     get:
-      operationId: 'updateAppSpec'
+      operationId: 'get_system_spec_by_id'
+      x-swagger-router-controller: 'api.v2.app_specs'
       tags:
         - app spec
       summary: Retrieve a single system-level Application Spec
@@ -839,6 +891,8 @@ paths:
         '404':
           description: Not found
     put:
+      operationId: 'update_system_spec'
+      x-swagger-router-controller: 'api.v2.app_specs'
       tags:
         - app spec
       summary: Update a user-level Application Spec
@@ -867,6 +921,8 @@ paths:
             schema:
               $ref: '#/components/schemas/AppSpec'
     delete:
+      operationId: 'delete_system_spec'
+      x-swagger-router-controller: 'api.v2.app_specs'
       tags:
         - app spec
       summary: Delete a user-level Application Spec
@@ -890,6 +946,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/username'
     get:
+      operationId: 'list_user_specs'
+      x-swagger-router-controller: 'api.v2.app_specs'
       tags:
         - app spec
       summary: Retrieve a list of user-level Application Specs
@@ -911,6 +969,8 @@ paths:
         '404':
           description: Not found
     post:
+      operationId: 'create_user_spec'
+      x-swagger-router-controller: 'api.v2.app_specs'
       tags:
         - app spec
       summary: Add a new user-level Application Spec
@@ -939,6 +999,8 @@ paths:
       - $ref: '#/components/parameters/username'
       - $ref: '#/components/parameters/spec-id'
     get:
+      operationId: 'get_user_spec_by_id'
+      x-swagger-router-controller: 'api.v2.app_specs'
       tags:
         - app spec
       summary: Retrieve a single user-level Application Spec
@@ -958,6 +1020,8 @@ paths:
         '404':
           description: Not found
     put:
+      operationId: 'update_user_spec'
+      x-swagger-router-controller: 'api.v2.app_specs'
       tags:
         - app spec
       summary: Update a user-level Application Spec
@@ -986,6 +1050,8 @@ paths:
             schema:
               $ref: '#/components/schemas/AppSpec'
     delete:
+      operationId: 'delete_user_spec'
+      x-swagger-router-controller: 'api.v2.app_specs'
       tags:
         - app spec
       summary: Delete a user-level Application Spec
@@ -1010,6 +1076,8 @@ paths:
     parameters:
       - $ref: '#/components/parameters/username'
     get:
+      operationId: 'list_user_apps'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Retrieve a list of User Application instances
@@ -1025,6 +1093,8 @@ paths:
                 items:
                   $ref: '#/components/schemas/UserApp'
     post:
+      operationId: 'create_user_app'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Create a new User Application instance
@@ -1054,6 +1124,8 @@ paths:
       - $ref: '#/components/parameters/username'
       - $ref: '#/components/parameters/user-app-id'
     get:
+      operationId: 'get_user_app_by_id'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Retrieve a single User Application instance created by a user
@@ -1067,6 +1139,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserApp'
     put:
+      operationId: 'update_user_app'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Update a User Application
@@ -1095,6 +1169,8 @@ paths:
             schema:
               $ref: '#/components/schemas/UserApp'
     delete:
+      operationId: 'delete_user_app'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Delete a (stopped) User Application instance
@@ -1120,6 +1196,8 @@ paths:
       - $ref: '#/components/parameters/username'
       - $ref: '#/components/parameters/user-app-id'
     get:
+      operationId: 'list_user_app_components'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Retrieve a list of components in a User Application
@@ -1141,6 +1219,8 @@ paths:
         '404':
           description: Not found
     post:
+      operationId: 'add_user_app_component'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Add a component to a User Application
@@ -1173,6 +1253,8 @@ paths:
       - $ref: '#/components/parameters/user-app-id'
       - $ref: '#/components/parameters/app-component-id'
     get:
+      operationId: 'get_user_app_component_by_id'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Retrieve a single component of a User Application
@@ -1192,6 +1274,8 @@ paths:
         '404':
           description: Not found
     put:
+      operationId: 'update_user_app_component'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Update a component of a User Application
@@ -1220,6 +1304,8 @@ paths:
             schema:
               $ref: '#/components/schemas/UserAppComponent'
     delete:
+      operationId: 'remove_user_app_component'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Remove a component from a User Application
@@ -1246,6 +1332,8 @@ paths:
       - $ref: '#/components/parameters/user-app-id'
       - $ref: '#/components/parameters/app-component-id'
     get:
+      operationId: 'launch_user_app'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Launch a User Application
@@ -1271,6 +1359,8 @@ paths:
       - $ref: '#/components/parameters/user-app-id'
       - $ref: '#/components/parameters/app-component-id'
     get:
+      operationId: 'shutdown_user_app'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Shutdown a User Application
@@ -1298,6 +1388,8 @@ paths:
       - $ref: '#/components/parameters/user-app-id'
       - $ref: '#/components/parameters/app-component-id'
     get:
+      operationId: 'get_user_app_logs_by_id'
+      x-swagger-router-controller: 'api.v2.user_apps'
       tags:
         - user app
       summary: Retrieve logs from a (running) component of a User Application

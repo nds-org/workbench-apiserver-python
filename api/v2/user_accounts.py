@@ -1,6 +1,5 @@
 import logging
 
-import base64
 import json
 import requests
 import connexion
@@ -14,9 +13,10 @@ import six
 
 from bson import ObjectId
 
-from pkg.mongo import get_mongo_client, parse_json
+import pkg.kube
 
-from pkg import config, kube, keycloak
+from pkg import config, kube
+from pkg.auth import keycloak
 
 #from helper import etcdClient
 #from pkg import validate
@@ -28,7 +28,7 @@ USER_ACCOUNTS_COLLECTION_NAME = 'user_accounts'
 
 
 def ensure_namespace_exists(username, labels):
-    namespace_name = config.get_resource_namespace(username)
+    namespace_name = pkg.kube.get_resource_namespace(username)
     # resource_prefix = config.get_resource_name(username)
 
     try:
@@ -42,11 +42,11 @@ def ensure_namespace_exists(username, labels):
 
 
 def ensure_resource_quota_exists(username, labels):
-    namespace_name = config.get_resource_namespace(username)
+    namespace_name = pkg.kube.get_resource_namespace(username)
 
     # Always create resource quote
     try:
-        quota_name = config.get_resource_name(username, "medium")
+        quota_name = pkg.kube.get_resource_name(username, "medium")
         return kube.create_resource_quota(quota_name=quota_name,
                                            namespace=namespace_name,
                                            labels=labels,
@@ -75,9 +75,10 @@ def ensure_resource_quota_exists(username, labels):
     except ApiValueError as err:
         logger.error("ApiValueError: Failed to create user resource quotas: " + str(err))
 
+
 def ensure_userdata_configmap_exists(username, labels):
-    configmap_namespace = config.get_resource_namespace(username)
-    configmap_name = config.get_resource_name(username, "user-data")
+    configmap_namespace = pkg.kube.get_resource_namespace(username)
+    configmap_name = pkg.kube.get_resource_name(username, "user-data")
 
     init_user_data = {"apps": [], "specs": []}
 
@@ -102,8 +103,8 @@ def ensure_userdata_configmap_exists(username, labels):
 
 
 def ensure_home_data_pvc_exists(username, labels):
-    pvc_namespace = config.get_resource_namespace(username)
-    pvc_name = config.get_resource_name(username, "home-data")
+    pvc_namespace = pkg.kube.get_resource_namespace(username)
+    pvc_name = pkg.kube.get_resource_name(username, "home-data")
 
     logger.debug("Creating PVC: " + pvc_name)
 
@@ -128,7 +129,7 @@ def ensure_user_ready(username):
         'user': username
     }
 
-    namespace_name = config.get_resource_namespace(username)
+    namespace_name = pkg.kube.get_resource_namespace(username)
 
     if namespace_name == username:
         ensure_namespace_exists(username, labels=labels)
@@ -159,7 +160,7 @@ def post_authenticate(auth):
         # Ensure account resources have been created
         ensure_user_ready(username)
 
-        return 200, { 'set-cookie': 'tokens=' + keycloak.encode_tokens(tokens) }
+        return 200, { 'set-cookie': 'tokens=' + keycloak.encode_tokens(tokens)}
     except requests.exceptions.RequestException as e:
         logger.error("Failed to login to Keycloak: %s" % e)
         return { 'error': 'Invalid credentials' }, 401

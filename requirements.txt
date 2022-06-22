@@ -3,6 +3,7 @@ connexion[swagger-ui]==2.7.0
 Werkzeug==2.0.1
 PyYAML==5.4.1
 prance==0.21.8.0
+Flask-Cors==3.0.10
 
 # General utils
 requests==2.25.1

@@ -1123,6 +1123,8 @@ definitions:
         type: string
       singlePod:
         type: boolean
+      collocate:
+        type: boolean
       readinessProbe:
         $ref: '#/definitions/ReadyProbe'
       imageTag:

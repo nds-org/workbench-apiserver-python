@@ -128,7 +128,7 @@ def determine_new_status(type, phase):
     elif phase == 'Error':  # TODO: errors at startup/runtime
         service_status = 'error'
     elif phase == 'Running' and type != 'DELETED':  # TODO: errors at startup/runtime
-        service_status = 'running'
+        service_status = 'started'
     elif type == 'ADDED':  # TODO: 'starting' incremental phase updates
         service_status = 'created'
     elif type == 'DELETED':  # TODO: 'stopping' incremental phase updates
@@ -153,9 +153,9 @@ def write_status_and_endpoints(userapp_id, username, service_key, service_status
                 service['endpoints'] = service_endpoints
 
         # if all services running, set whole app state to running
-        running_services = [x['service'] for x in services if x['status'] == 'running']
+        running_services = [x['service'] for x in services if x['status'] == 'started']
         if len(running_services) == len(services):
-            userapp['status'] = 'running'
+            userapp['status'] = 'started'
             logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'running', username))
 
         # if all services stopped, set whole app state to stopped
@@ -463,14 +463,14 @@ def patch_scale_userapp(username, userapp, replicas):
     should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else config.KUBE_WORKBENCH_SINGLEPOD
     if should_run_as_single_pod:
         deployment_name = get_resource_name(userapp_id, userapp['key'])
-        patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas)
+        return patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas)
     else:
+        results = []
         for stack_service in userapp['services']:
             service_key = stack_service['service']
             name = get_resource_name(userapp_id, userapp['key'], service_key)
-            patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
-
-    return True
+            results += patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
+        return True in results
 
 # Cleans up the Kubernetes resources related to a userapp
 def destroy_userapp(username, userapp):
@@ -540,11 +540,20 @@ def get_deployment(name, namespace):
             raise exc
 
 
-def patch_scale_deployment(deployment_name, namespace, replicas):
+def patch_scale_deployment(deployment_name, namespace, replicas) -> bool:
+    # No-op if we can't find the deployment
     deployment = get_deployment(name=deployment_name, namespace=namespace)
     if deployment is None:
-        return None
+        # TODO: Raise an error here?
+        return False
 
+    # No-op if we have our desired number of replicas
+    current_repl = deployment.spec.replicas
+    if current_repl == replicas:
+        logger.debug("No-op for setting replicas number: %d -> %d" % (current_repl, replicas))
+        return False
+
+    # Query number of replicas
     return client.AppsV1Api().patch_namespaced_deployment_scale(namespace=namespace, name=deployment_name,
                                                                 body={'spec': {'replicas': replicas}})
 

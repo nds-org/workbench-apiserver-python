@@ -28,7 +28,7 @@ def login(username, password):
             'refresh_token': tokens['refresh_token']
         }
     except requests.exceptions.RequestException as e:
-        logger.error("Failed to refresh Keycloak token: %s" % e)
+        logger.error("Failed to login to Keycloak: %s" % e)
         raise Unauthorized
 
 

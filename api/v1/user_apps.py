@@ -214,10 +214,6 @@ def stop_stack(stack_id, user, token_info):
     if userapp['creator'] != user:
         return {'error': 'Only the owner may shutdown a userapp'}, 403, jwt.get_token_cookie(user)
 
-    status = userapp['status']
-    if status != 'stopping' and status != 'stopped':
-         userapp['status'] = 'stopping'
-
     #kube.patch_scale_userapp(username=user, userapp=userapp, replicas=0)
     #data_store.update_userapp(userapp)
     #return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
@@ -225,6 +221,10 @@ def stop_stack(stack_id, user, token_info):
     # Eventually, Pod is Running and event watchers
     #    should update userapp state to STOPPED
     if kube.patch_scale_userapp(username=user, userapp=userapp, replicas=0):
+        status = userapp['status']
+        if status != 'stopping' and status != 'stopped':
+            userapp['status'] = 'stopping'
+
         data_store.update_userapp(userapp)
         return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
     else:
@@ -233,6 +233,7 @@ def stop_stack(stack_id, user, token_info):
 
 
 # Returns True if update was successful
+# CURRENTLY UNUSED
 def update_userapp_status(stack_id, service_key, new_status, new_endpoints, user, token_info):
     logger.info('Got new endpoints: %s' % str(new_endpoints))
 
@@ -257,9 +258,9 @@ def update_userapp_status(stack_id, service_key, new_status, new_endpoints, user
     service['status'] = new_status
 
     # if all services running, set whole app state to running
-    running_services = [x['service'] for x in services if x['status'] == 'running']
+    running_services = [x['service'] for x in services if x['status'] == 'started']
     if len(running_services) == len(services):
-        userapp['status'] = 'running'
+        userapp['status'] = 'started'
 
     # if all services stopped, set whole app state to stopped
     stopped_services = [x['service'] for x in services if x['status'] == 'stopped']

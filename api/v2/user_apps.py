@@ -1,13 +1,9 @@
-import json
 import os
 import uuid
-from bson import ObjectId
 from kubernetes.client import ApiException, ApiValueError
 
-from pkg import kube, config, keycloak
-from pkg.mongo import get_mongo_client, parse_json
-
-from kubernetes import client
+import pkg.kube
+from pkg import kube, config
 
 import logging
 
@@ -28,7 +24,7 @@ def list_stacks(user, token_info):
     logger.debug("New User: " + str(user))
 
     username = token_info['preferred_username']
-    namespace = config.get_resource_namespace(username)
+    namespace = pkg.kube.get_resource_namespace(username)
 
     try:
         userapps = kube.list_custom_user_apps(namespace)
@@ -60,9 +56,9 @@ def create_stack(user, token_info, stack):
 
     # TODO: Build up full request parameters
     username = token_info['preferred_username']
-    namespace = config.get_resource_namespace(username)
+    namespace = pkg.kube.get_resource_namespace(username)
 
-    app_name = config.get_resource_name(username, sid)
+    app_name = pkg.kube.get_resource_name(username, sid)
 
     service_ports = {
         'http': 80,
@@ -70,6 +66,7 @@ def create_stack(user, token_info, stack):
     }
     labels = {
         'manager': 'workbench',
+        'user': username,
         'workbench-app': sid
     }
 
@@ -79,7 +76,7 @@ def create_stack(user, token_info, stack):
 
     logger.debug("Service created: " + str(service))
     for port in service_ports:
-        ingress_name = config.get_resource_name(username, app_name, port)
+        ingress_name = pkg.kube.get_resource_name(username, app_name, port)
         ingress = kube.create_ingress(ingress_name=ingress_name, host='%s.%s' % (ingress_name, config.DOMAIN),
                                       path='/', pathType='Prefix', namespace=namespace,
                                       service_name=service.metadata.name, service_port=port)
@@ -131,9 +128,9 @@ def create_stack(user, token_info, stack):
 
 def get_stack_by_id(user, token_info, stack_id):
     username = token_info['preferred_username']
-    namespace = config.get_resource_namespace(username)
+    namespace = pkg.kube.get_resource_namespace(username)
 
-    name = config.get_resource_name(username, stack_id)
+    name = pkg.kube.get_resource_name(username, stack_id)
 
     try:
         return kube.retrieve_custom_user_app(name, namespace), 200
@@ -154,9 +151,9 @@ def get_stack_by_id(user, token_info, stack_id):
 
 def update_stack(user, token_info, stack_id, stack):
     username = token_info['preferred_username']
-    namespace = config.get_resource_namespace(username)
+    namespace = pkg.kube.get_resource_namespace(username)
 
-    name = config.get_resource_name(username, stack_id)
+    name = pkg.kube.get_resource_name(username, stack_id)
 
     try:
         return kube.replace_custom_user_app(name, namespace, stack), 200
@@ -177,9 +174,9 @@ def update_stack(user, token_info, stack_id, stack):
 
 def delete_stack(user, token_info, stack_id):
     username = token_info['preferred_username']
-    namespace = config.get_resource_namespace(username)
+    namespace = pkg.kube.get_resource_namespace(username)
 
-    name = config.get_resource_name(username, stack_id)
+    name = pkg.kube.get_resource_name(username, stack_id)
 
     try:
         return kube.delete_custom_user_app(name, namespace), 200
@@ -199,9 +196,9 @@ def delete_stack(user, token_info, stack_id):
 
 def start_stack(user, token_info, stack_id):
     username = token_info['preferred_username']
-    namespace = config.get_resource_namespace(username)
+    namespace = pkg.kube.get_resource_namespace(username)
 
-    name = config.get_resource_name(username, stack_id)
+    name = pkg.kube.get_resource_name(username, stack_id)
 
     try:
         return kube.patch_scale_deployment(name, namespace, 1), 200
@@ -222,9 +219,9 @@ def start_stack(user, token_info, stack_id):
 
 def stop_stack(user, token_info, stack_id):
     username = token_info['preferred_username']
-    namespace = config.get_resource_namespace(username)
+    namespace = pkg.kube.get_resource_namespace(username)
 
-    name = config.get_resource_name(username, stack_id)
+    name = pkg.kube.get_resource_name(username, stack_id)
 
     try:
         return kube.patch_scale_deployment(name, namespace, 0), 200
