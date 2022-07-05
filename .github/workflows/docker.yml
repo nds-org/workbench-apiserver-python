@@ -59,7 +59,7 @@ jobs:
           
           # Commit was for main/release branch, build a new version
           if [ "$BRANCH" == "master" -o "$BRANCH" == "main" ]; then
-            version="$(cat gui/package.json | jq -r .version)"
+            version="$(cat /root/swagger.yml | grep "^  version:" | awk '{print $2}')"
             echo "VERSION=$(version)" >> $GITHUB_ENV
             tags="latest"
             oldversion=""
