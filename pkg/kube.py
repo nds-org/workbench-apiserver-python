@@ -1,3 +1,4 @@
+import json
 import logging
 import logging.config
 import string
@@ -8,6 +9,7 @@ import threading
 
 import urllib3
 from kubernetes import watch, client, config as kubeconfig
+from kubernetes.stream import stream
 from kubernetes.client import ApiException
 from requests import HTTPError
 
@@ -32,7 +34,6 @@ kubeconfig.load_kube_config()
 custom = client.CustomObjectsApi()
 
 client.api_client.rest.logger.setLevel(logging.WARNING)
-
 
 # TODO: V2 - watch custom resources and react accordingly
 # watched_namespaces = ["test"]
@@ -222,7 +223,7 @@ class KubeEventWatcher:
 
                     missing_labels = [x for x in required_labels if x not in labels]
                     if len(missing_labels) > 0:
-                        self.logger.warning('WARNING: Skipping due to missing required label(s): ' + missing_labels)
+                        self.logger.warning('WARNING: Skipping due to missing required label(s): ' + str(missing_labels))
                         continue
 
                     # TODO: lookup associated userapp using resource name
@@ -236,7 +237,8 @@ class KubeEventWatcher:
 
                     userapp_id = segments[0]
                     username = labels['user']
-                    service_key = '-'.join(segments[1:-2])
+                    # sid-stackkey-svckey-deploymentsuffix-podsuffix => we want 3rd to last
+                    service_key = segments[-3]
 
                     type = event['type']
                     phase = event['object'].status.phase
@@ -271,6 +273,51 @@ class KubeEventWatcher:
         if self.thread.is_alive():
             self.thread.join(timeout=3)
             self.thread = None
+
+
+def open_exec_userapp_interactive(user, ssid, ws):
+    v1 = client.CoreV1Api()
+
+    namespace = get_resource_namespace(username=user)
+    pod_name = get_pod_name(user=user, ssid=ssid)
+
+    # Calling exec interactively
+    # TODO: parameterize via spec field
+    exec_command = ['/bin/sh']
+    resp = stream(v1.connect_get_namespaced_pod_exec,
+                  pod_name,
+                  namespace,
+                  command=exec_command,
+                  stderr=True, stdin=True,
+                  stdout=True, tty=True,
+                  _preload_content=False)
+
+    try:
+
+        while resp.is_open():
+            # Grab command string data from Websocket (without blocking)
+            user_input = ws.receive(timeout=0)
+
+            # if "exit", then quit,
+            if user_input == "exit":
+                break
+
+            # otherwise send to stdin
+            elif user_input:
+                logger.debug('Sending command: ' + user_input)
+                resp.write_stdin(user_input + "\n")
+
+            # read command stdout/stderr without blocking
+            resp.update(timeout=0)
+            if resp.peek_stdout(timeout=0):
+                ws.send(resp.read_stdout(timeout=0))
+            if resp.peek_stderr(timeout=0):
+                ws.send(resp.read_stderr(timeout=0))
+
+    finally:
+        resp.close()
+        #ws.send('CONNECTION LOST')
+        #ws.close()
 
 
 def generate_random_password(length=16):
@@ -353,6 +400,7 @@ def init_user(username):
     # TODO: create_service_account()
 
 
+
 # Creates the Kubernetes resources related to a userapp
 def create_userapp(username, userapp, spec_map):
     namespace = get_resource_namespace(username)
@@ -372,6 +420,8 @@ def create_userapp(username, userapp, spec_map):
     for stack_service in userapp['services']:
         service_key = stack_service['service']
         app_spec = spec_map.get(service_key, None)
+        svc_labels = {'workbench-svc': service_key}
+        svc_labels.update(labels)
         if app_spec is None:
             logger.error("Failed to find app_spec: %s" % service_key)
             raise AppSpecNotFoundError("Failed to find app_spec: %s" % service_key)
@@ -408,7 +458,7 @@ def create_userapp(username, userapp, spec_map):
 
         # Create one Kubernetes service per-stack service
         create_service(service_name=resource_name,
-                       namespace=namespace, labels=labels,
+                       namespace=namespace, labels=svc_labels,
                        service_ports=service_ports)
 
         if len(configmap_data) > 0:
@@ -420,7 +470,7 @@ def create_userapp(username, userapp, spec_map):
             create_deployment(deployment_name=get_resource_name(userapp_id, userapp_key, service_key),
                               namespace=namespace,
                               replicas=0,
-                              labels=labels,
+                              labels=svc_labels,
                               containers=[container])
 
     # Create one ingress per-stack
@@ -466,11 +516,12 @@ def patch_scale_userapp(username, userapp, replicas):
         return patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas)
     else:
         results = []
+        # TODO: how to check results
         for stack_service in userapp['services']:
             service_key = stack_service['service']
             name = get_resource_name(userapp_id, userapp['key'], service_key)
-            results += patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
-        return True in results
+            patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
+        return True
 
 # Cleans up the Kubernetes resources related to a userapp
 def destroy_userapp(username, userapp):
@@ -904,6 +955,37 @@ def delete_ingress(name, namespace):
         if not isinstance(exc, ApiException) or exc.status != 404:
             logger.error("Error deleting ingress resource: %s" % str(exc))
             raise exc
+
+
+
+# Include workbench app labels
+# Example:      'labels': {'manager': 'workbench',
+#                          'pod-template-hash': '977967b76',
+#                          'user': 'test',
+#                          'workbench-app': 's00402'}
+def get_pod_name(user, ssid):
+
+    namespace = get_resource_namespace(username=user)
+    id_segments = ssid.split('-')
+    userapp_id = id_segments[0]
+    service_key = id_segments[1]
+
+    print(f"Looking up pod for user={user} for ssid={ssid} within userapp={userapp_id}")
+
+    v1 = client.CoreV1Api()
+    ret = v1.list_namespaced_pod(namespace=namespace,
+                                 label_selector='manager=%s,user=%s,workbench-app=%s,workbench-svc=%s' %
+                                                ('workbench', user, userapp_id, service_key))
+    if len(ret.items) > 1:
+        print(f"Warning: {len(ret.items)} matches found for user={user} for ssid={ssid} within userapp={userapp_id}. Assuming first Running/Ready pod.")
+    elif len(ret.items) == 0:
+        print(f"Warning: no matches found for user={user} for ssid={ssid} within userapp={userapp_id}")
+
+    for i in ret.items:
+        print(i.metadata.name)
+        return i.metadata.name
+    # return { 'name': ingress_name, 'namespace': ingress_namespace }, 201
+
 
 
 def get_pods():

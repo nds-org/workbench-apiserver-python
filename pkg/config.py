@@ -105,6 +105,9 @@ KC_SCOPE = 'profile email openid workbench-accounts'
 KC_ISSUER = ''
 KC_AUDIENCE = 'workbench-local'
 
+SOCK_PING_INTERVAL = int(os.getenv('SOCK_PING_INTERVAL', 25))
+max_msg_size = os.getenv('SOCK_MAX_MESSAGE_SIZE', None)
+SOCK_MAX_MESSAGE_SIZE = int(max_msg_size) if max_msg_size else max_msg_size
 
 # TODO: fetch token
 # curl https://keycloak.workbench.ndslabs.org/auth/realms/workbench-dev/protocol/openid-connect/token -XPOST --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'client_id=workbench-local' --data-urlencode 'grant_type=password' --data-urlencode 'username=test' --data-urlencode 'password=mysamplepasswordissupersecure' --data-urlencode 'scope=openid' --data-urlencode 'client_secret=73305daa-c3d9-4ec7-aec0-caa9b030e182'

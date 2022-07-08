@@ -1,7 +1,11 @@
+import json
 import logging
+import os
 
 import connexion
+from flask import request
 from flask_cors import CORS
+from flask_sock import Sock
 
 from pkg import config, kube
 
@@ -9,6 +13,9 @@ from pkg.openapi.resolver import OperationResolver
 
 
 logger = logging.getLogger("server")
+
+sock = Sock()
+
 
 if __name__ == '__main__':
     debug = config.DEBUG
@@ -23,6 +30,20 @@ if __name__ == '__main__':
     kube.initialize()
 
     app = connexion.FlaskApp(__name__, debug=debug)
+    app.app.config['SOCK_SERVER_OPTIONS'] = {'ping_interval': config.SOCK_PING_INTERVAL,
+                                             'max_message_size': config.SOCK_MAX_MESSAGE_SIZE}
+
+    sock = Sock(app.app)
+
+    # example: /api/console?namespace=lambert8&ssid=svwk8l-toolmanager
+    @sock.route('/api/console')
+    def console(ws):
+        namespace = request.args.get('namespace')
+        ssid = request.args.get('ssid')
+
+        logger.debug(f'Connecting to: {namespace}/{ssid}')
+        kube.open_exec_userapp_interactive(user=namespace, ssid=ssid, ws=ws)
+
 
     if str.startswith(config.SWAGGER_URL, "http"):
         # fetch remote openapi spec
@@ -46,3 +67,4 @@ if __name__ == '__main__':
         app.run(port=5000, host='0.0.0.0', server='flask', debug=debug)
     finally:
         watcher.close()
+
