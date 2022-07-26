@@ -13,6 +13,10 @@ DEBUG = os.getenv('DEBUG', 'false').lower() in ('true', '1', 't')
 
 DOMAIN = 'local.ndslabs.org'
 
+# Internal messaging
+ZMQ_SOCKET_SERVER_URI = 'tcp://*:5001'
+ZMQ_SOCKET_CLIENT_URI = 'tcp://localhost:5002'
+
 # v1
 DEFAULT_ACCT_MEM = '8GB'
 DEFAULT_ACCT_CPU = '2M'
@@ -40,6 +44,7 @@ ETCD_BASE_PATH = os.getenv('ETCD_BASE_PATH', '/ndslabs')
 # MongoStore
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/ndslabs')
 MONGO_DB = os.getenv('MONGO_DB', 'ndslabs')
+
 
 # Kubernetes
 KUBE_HOST = os.getenv('KUBE_HOST', 'localhost')

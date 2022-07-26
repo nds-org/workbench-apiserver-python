@@ -8,6 +8,7 @@ import time
 import threading
 
 import urllib3
+import zmq
 from kubernetes import watch, client, config as kubeconfig
 from kubernetes.stream import stream
 from kubernetes.client import ApiException
@@ -33,7 +34,9 @@ BASE_URL = 'http://localhost:5000'
 kubeconfig.load_kube_config()
 custom = client.CustomObjectsApi()
 
+
 client.api_client.rest.logger.setLevel(logging.WARNING)
+
 
 # TODO: V2 - watch custom resources and react accordingly
 # watched_namespaces = ["test"]
@@ -176,6 +179,12 @@ class KubeEventWatcher:
     def __init__(self):
         self.logger = logging.getLogger('kube-event-watcher')
         self.thread = threading.Thread(target=self.run, name='kube-event-watcher', daemon=True)
+
+        self.context = zmq.Context()
+        self.socket = None
+        #self.sio = socketio.Client()
+        #self.socket = self.sio.connect('http://localhost:5000')
+
         self.stream = None
         logger.info('Starting Kube event watcher')
         self.thread.start()
@@ -253,6 +262,21 @@ class KubeEventWatcher:
                     service_status = determine_new_status(type, phase)
                     write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip, service_endpoints)
 
+                    try:
+                        self.socket = self.context.socket(zmq.REQ)
+                        self.socket.connect(config.ZMQ_SOCKET_CLIENT_URI)
+
+                        # Send an event to the UI Websocket, if anyone is listening
+                        self.socket.send_json({
+                            'user': username,
+                            'userapp': userapp_id,
+                            'service_key': service_key,
+                            'service_endpoints': service_endpoints,
+                            'service_status': service_status
+                        })
+                    finally:
+                        self.socket.close()
+
                     logger.debug(
                         'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s' % (userapp_id, service_key, type, phase, service_status))
             except urllib3.exceptions.ProtocolError as e:
@@ -268,6 +292,10 @@ class KubeEventWatcher:
         return self.thread.is_alive()
 
     def close(self):
+        if self.socket:
+            self.socket.close()
+        if self.context:
+            self.context.term()
         if self.thread is None:
             return
         if self.thread.is_alive():
