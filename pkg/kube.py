@@ -283,7 +283,7 @@ def open_exec_userapp_interactive(user, ssid, ws):
 
     # Calling exec interactively
     # TODO: parameterize via spec field
-    exec_command = ['/bin/sh']
+    exec_command = ['/bin/sh', '-c', '(bash || ash || sh)']
     resp = stream(v1.connect_get_namespaced_pod_exec,
                   pod_name,
                   namespace,
@@ -293,31 +293,36 @@ def open_exec_userapp_interactive(user, ssid, ws):
                   _preload_content=False)
 
     try:
-
         while resp.is_open():
             # Grab command string data from Websocket (without blocking)
             user_input = ws.receive(timeout=0)
 
             # if "exit", then quit,
-            if user_input == "exit":
-                break
+            # TODO: needs better "exit" strategy
+            #if user_input == "@@@q":
+            #    break
 
             # otherwise send to stdin
-            elif user_input:
+            if user_input:
                 logger.debug('Sending command: ' + user_input)
                 resp.write_stdin(user_input + "\n")
 
-            # read command stdout/stderr without blocking
-            resp.update(timeout=0)
-            if resp.peek_stdout(timeout=0):
-                ws.send(resp.read_stdout(timeout=0))
-            if resp.peek_stderr(timeout=0):
-                ws.send(resp.read_stderr(timeout=0))
-
+            if resp.is_open():
+                # read command stdout/stderr without blocking
+                resp.update(timeout=0)
+                if resp.peek_stdout(timeout=0):
+                    ws.send(resp.read_stdout(timeout=0))
+                if resp.peek_stderr(timeout=0):
+                    ws.send(resp.read_stderr(timeout=0))
+    except Exception as e:
+        logger.exception(" >>> Exception encountered:", e)
     finally:
-        resp.close()
-        #ws.send('CONNECTION LOST')
+        ws.send('CONNECTION CLOSED')
         #ws.close()
+        if resp.is_open():
+            resp.close()
+
+        logger.info("Success! :D")
 
 
 def generate_random_password(length=16):
