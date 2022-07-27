@@ -17,6 +17,8 @@ DOMAIN = 'local.ndslabs.org'
 ZMQ_SOCKET_SERVER_URI = 'tcp://*:5001'
 ZMQ_SOCKET_CLIENT_URI = 'tcp://localhost:5002'
 
+SSL_VERIFY = False
+
 # v1
 DEFAULT_ACCT_MEM = '8GB'
 DEFAULT_ACCT_CPU = '2M'

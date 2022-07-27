@@ -31,9 +31,7 @@ logger = logging.getLogger('kube')
 
 BASE_URL = 'http://localhost:5000'
 
-kubeconfig.load_kube_config()
 custom = client.CustomObjectsApi()
-
 
 client.api_client.rest.logger.setLevel(logging.WARNING)
 
@@ -180,11 +178,6 @@ class KubeEventWatcher:
         self.logger = logging.getLogger('kube-event-watcher')
         self.thread = threading.Thread(target=self.run, name='kube-event-watcher', daemon=True)
 
-        self.context = zmq.Context()
-        self.socket = None
-        #self.sio = socketio.Client()
-        #self.socket = self.sio.connect('http://localhost:5000')
-
         self.stream = None
         logger.info('Starting Kube event watcher')
         self.thread.start()
@@ -262,21 +255,6 @@ class KubeEventWatcher:
                     service_status = determine_new_status(type, phase)
                     write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip, service_endpoints)
 
-                    try:
-                        self.socket = self.context.socket(zmq.REQ)
-                        self.socket.connect(config.ZMQ_SOCKET_CLIENT_URI)
-
-                        # Send an event to the UI Websocket, if anyone is listening
-                        self.socket.send_json({
-                            'user': username,
-                            'userapp': userapp_id,
-                            'service_key': service_key,
-                            'service_endpoints': service_endpoints,
-                            'service_status': service_status
-                        })
-                    finally:
-                        self.socket.close()
-
                     logger.debug(
                         'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s' % (userapp_id, service_key, type, phase, service_status))
             except urllib3.exceptions.ProtocolError as e:
@@ -292,10 +270,6 @@ class KubeEventWatcher:
         return self.thread.is_alive()
 
     def close(self):
-        if self.socket:
-            self.socket.close()
-        if self.context:
-            self.context.term()
         if self.thread is None:
             return
         if self.thread.is_alive():
@@ -324,16 +298,11 @@ def open_exec_userapp_interactive(user, ssid, ws):
         while resp.is_open():
             # Grab command string data from Websocket (without blocking)
             user_input = ws.receive(timeout=0)
-
-            # if "exit", then quit,
-            # TODO: needs better "exit" strategy
-            #if user_input == "@@@q":
-            #    break
-
+            
             # otherwise send to stdin
             if user_input:
                 logger.debug('Sending command: ' + user_input)
-                resp.write_stdin(user_input + "\n")
+                resp.write_stdin(user_input)
 
             if resp.is_open():
                 # read command stdout/stderr without blocking
@@ -383,6 +352,11 @@ def get_resource_namespace(username):
 
 
 # TODO: Replace with explicit boolean
+def is_single_pod():
+    return config.KUBE_WORKBENCH_SINGLEPOD
+
+
+# TODO: Replace with explicit boolean
 def is_single_namespace():
     return True if config.KUBE_WORKBENCH_NAMESPACE is not None and config.KUBE_WORKBENCH_NAMESPACE != '' else False
 
@@ -395,6 +369,10 @@ def is_single_namespace():
 #
 #
 def initialize():
+    kubeconfig.load_kube_config()
+    host = kubeconfig.kube_config.Configuration().host
+    logging.info("KUBE HOST INFO: {}".format(host))
+
     if is_single_namespace():
         logger.debug("Starting in single-namespace mode: " + config.KUBE_WORKBENCH_NAMESPACE)
         try:
@@ -453,8 +431,9 @@ def create_userapp(username, userapp, spec_map):
     for stack_service in userapp['services']:
         service_key = stack_service['service']
         app_spec = spec_map.get(service_key, None)
-        svc_labels = {'workbench-svc': service_key}
-        svc_labels.update(labels)
+        svc_labels = labels.copy()
+        svc_labels['workbench-svc'] = service_key
+        print("Created svc_labels: " + str(svc_labels))
         if app_spec is None:
             logger.error("Failed to find app_spec: %s" % service_key)
             raise AppSpecNotFoundError("Failed to find app_spec: %s" % service_key)
@@ -1000,8 +979,14 @@ def get_pod_name(user, ssid):
 
     namespace = get_resource_namespace(username=user)
     id_segments = ssid.split('-')
-    userapp_id = id_segments[0]
-    service_key = id_segments[1]
+
+    if is_single_pod:
+        userapp_id = id_segments[0]
+        service_key = id_segments[1]
+    else:
+        userapp_id = id_segments[0]
+        # stack_key = id_segments[1]  # not needed here
+        service_key = id_segments[2]
 
     print(f"Looking up pod for user={user} for ssid={ssid} within userapp={userapp_id}")
 
@@ -1013,10 +998,16 @@ def get_pod_name(user, ssid):
         print(f"Warning: {len(ret.items)} matches found for user={user} for ssid={ssid} within userapp={userapp_id}. Assuming first Running/Ready pod.")
     elif len(ret.items) == 0:
         print(f"Warning: no matches found for user={user} for ssid={ssid} within userapp={userapp_id}")
+    print("Searching...")
+    print("Searching...")
+    print("Searching...")
+    print("Searching...")
 
     for i in ret.items:
         print(i.metadata.name)
         return i.metadata.name
+
+    raise Exception("Failed to find pod name for: " + user + "/" + ssid)
     # return { 'name': ingress_name, 'namespace': ingress_namespace }, 201
 
 
