@@ -3,21 +3,42 @@ import os
 import requests
 import tempfile
 
+import json
 import logging
 
 from jose import jwk
 from jose.utils import base64url_decode
+
 
 logger = logging.getLogger('config')
 DEBUG = os.getenv('DEBUG', 'false').lower() in ('true', '1', 't')
 
 DOMAIN = 'local.ndslabs.org'
 
+# Read app/env/backend.json and frontend/json
+loaded_backend = False
+loaded_frontend = False
+
+if not loaded_frontend:
+    with open('./env/frontend.json') as f:
+        frontend_config = json.load(f)
+        for i in frontend_config.items():
+            print(i)
+        loaded_frontend = True
+
+if not loaded_backend:
+    with open('./env/backend.json') as f:
+        # returns JSON object as a dict
+        backend_config = json.load(f)
+        for i in backend_config.items():
+            print(i)
+        loaded_backend = True
+
 # Internal messaging
 ZMQ_SOCKET_SERVER_URI = 'tcp://*:5001'
 ZMQ_SOCKET_CLIENT_URI = 'tcp://localhost:5002'
 
-SSL_VERIFY = False
+SSL_VERIFY = os.getenv('INSECURE_SSL_VERIFY', 'false').lower() in ('true', '1', 't')
 
 # v1
 DEFAULT_ACCT_MEM = '8GB'
@@ -44,8 +65,8 @@ ETCD_PORT = os.getenv('ETCD_PORT', 4001)
 ETCD_BASE_PATH = os.getenv('ETCD_BASE_PATH', '/ndslabs')
 
 # MongoStore
-MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/ndslabs')
-MONGO_DB = os.getenv('MONGO_DB', 'ndslabs')
+MONGO_URI = os.getenv('MONGO_URI', backend_config['mongo']['uri'])
+MONGO_DB = os.getenv('MONGO_DB', backend_config['mongo']['db'] if 'db' in backend_config['mongo'] else 'ndslabs')
 
 
 # Kubernetes
@@ -56,7 +77,7 @@ KUBE_TOKENPATH = os.getenv('KUBE_TOKENPATH', '/run/secrets/kubernetes.io/service
 #KUBE_BURST = os.getenv('KUBE_BURST', 100)
 
 
-CALLBACK_SERVICE_ACCOUNT_JWT = os.getenv('CALLBACK_SERVICE_ACCOUNT_JWT', 'eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJibnJWdTc5N0lGRXRXSkJ2TnpjbXVvTTR3ZkhGRnIyQ1REN2czTlhlWV9NIn0.eyJleHAiOjE2NTI5ODUxOTgsImlhdCI6MTY1Mjk4NTEzOCwianRpIjoiZjI1ZWE5NWMtZjUyYi00NjZjLTk5N2QtNmQ5NmYxZjc3NTg4IiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy93b3JrYmVuY2gtZGV2IiwiYXVkIjpbIndvcmtiZW5jaC1sb2NhbCIsImFjY291bnQiXSwic3ViIjoidGVzdCIsInR5cCI6IkJlYXJlciIsImF6cCI6IndvcmtiZW5jaC1sb2NhbCIsInNlc3Npb25fc3RhdGUiOiJjOTg3OTJhMC0zYmQ1LTQwMDItYjdjZS0wYTljMjlhZWMyYzAiLCJhY3IiOiIxIiwiYWxsb3dlZC1vcmlnaW5zIjpbImh0dHA6Ly9sb2NhbGhvc3Q6MzAwMCJdLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsid29ya2JlbmNoLWNhdGFsb2ciLCJkZWZhdWx0LXJvbGVzLXdvcmtiZW5jaC1kZXYiLCJvZmZsaW5lX2FjY2VzcyIsIndvcmtiZW5jaC1kZXYiLCJ1bWFfYXV0aG9yaXphdGlvbiIsIndvcmtiZW5jaC1hZG1pbiIsIndvcmtiZW5jaC1hY2NvdW50cyJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgd29ya2JlbmNoLWFjY291bnRzIGVtYWlsIiwic2lkIjoiYzk4NzkyYTAtM2JkNS00MDAyLWI3Y2UtMGE5YzI5YWVjMmMwIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJuYW1lIjoiVGVzdCBVc2VyIiwicHJlZmVycmVkX3VzZXJuYW1lIjoidGVzdCIsImdpdmVuX25hbWUiOiJUZXN0IiwiZmFtaWx5X25hbWUiOiJVc2VyIiwiZW1haWwiOiJ0ZXN0QGxvY2FsaG9zdCJ9.tn03ejxvtc6diInwe-TU7b24I4Emr31NpsTk2Df72YJIUfQmbBdvbm05n0J_yHQdINjtg3Xsi4cACjsmSuGikF-hVw7U6mic6qocnnLxsu_idoq8-3qcgQB06VBNmr2LKuT3m0RhChSB-FpXyVjsGtLFweqZfQ-KR3ZMhcoBBfZQH_v0BjCancQwtLOF-xENQ86RrB2acsM8fPUYuRVVWH33x4JBwAZdNK2QGJhJkt3e581URQ47-IgAdIIwQSfaVYPCUzQymIuoEcEtBW0O-orEtq-vovaLLEVE6H6RWERWyEcruIS___1zNppnNznN1AvADQJOHJnXq7GbFbcB2w')
+CALLBACK_SERVICE_ACCOUNT_JWT = os.getenv('CALLBACK_SERVICE_ACCOUNT_JWT', '')
 CALLBACK_HOST = os.getenv('CALLBACK_HOST', 'http://localhost:5000')
 CALLBACK_URL_TEMPLATE = os.getenv('CALLBACK_URL_TEMPLATE', CALLBACK_HOST + '/api/v1/stacks/%s/status')
 
@@ -71,7 +92,7 @@ SWAGGER_URL = os.getenv('SWAGGER_URL', 'openapi/swagger-v1.yml')
 
 # Downloads a remote swagger spec from the configured SWAGGER_URL and save it to a temp file.
 # Returns the path to the temp file created.
-def download_remote_swagger_to_temp_file(temp_file_name='swagger-keycloak.yml'):
+def download_remote_swagger_to_temp_file(temp_file_name='swagger-tmp.yml'):
     try:
         # fetch swagger spec, parse response
         swagger_response = requests.get(SWAGGER_URL)
@@ -90,10 +111,10 @@ def download_remote_swagger_to_temp_file(temp_file_name='swagger-keycloak.yml'):
 
 
 # Use central Keycloak
-KEYCLOAK_HOST = os.getenv('KEYCLOAK_HOST', 'http://localhost:8080')
-KEYCLOAK_REALM = os.getenv('KEYCLOAK_REALM', 'workbench-dev')
-KEYCLOAK_CLIENT_ID = os.getenv('KEYCLOAK_CLIENT_ID', 'workbench-local')
-KEYCLOAK_CLIENT_SECRET = os.getenv('KEYCLOAK_CLIENT_SECRET', '')
+KEYCLOAK_HOST = os.getenv('KEYCLOAK_HOST', backend_config['keycloak']['hostname'])
+KEYCLOAK_REALM = os.getenv('KEYCLOAK_REALM', backend_config['keycloak']['realmName'])
+KEYCLOAK_CLIENT_ID = os.getenv('KEYCLOAK_CLIENT_ID', backend_config['keycloak']['clientId'])
+KEYCLOAK_CLIENT_SECRET = os.getenv('KEYCLOAK_CLIENT_SECRET', backend_config['keycloak']['clientSecret'] if 'clientSecret' in backend_config['keycloak'] else '')
 
 KC_REALM_URL = '%s/realms/%s' % (KEYCLOAK_HOST, KEYCLOAK_REALM)
 KC_OIDC_PREFIX = '%s/protocol/openid-connect' % KC_REALM_URL
@@ -120,7 +141,7 @@ SOCK_MAX_MESSAGE_SIZE = int(max_msg_size) if max_msg_size else max_msg_size
 # curl https://keycloak.workbench.ndslabs.org/auth/realms/workbench-dev/protocol/openid-connect/token -XPOST --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'client_id=workbench-local' --data-urlencode 'grant_type=password' --data-urlencode 'username=test' --data-urlencode 'password=mysamplepasswordissupersecure' --data-urlencode 'scope=openid' --data-urlencode 'client_secret=73305daa-c3d9-4ec7-aec0-caa9b030e182'
 
 try:
-    resp = requests.get(KC_REALM_URL)
+    resp = requests.get(KC_REALM_URL, verify=SSL_VERIFY)
     resp.raise_for_status()
     open_id_config = resp.json()
     # fetch from https://keycloak.workbench.ndslabs.org/auth/realms/workbench-dev
@@ -129,7 +150,7 @@ try:
     KC_USERINFO_URL = "%s/userinfo" % KC_OIDC_PREFIX
     KC_LOGOUT_URL = "%s/logout" % KC_OIDC_PREFIX
     KC_CERTS_URL = "%s/certs" % KC_OIDC_PREFIX
-    resp = requests.get(KC_CERTS_URL)
+    resp = requests.get(KC_CERTS_URL, verify=SSL_VERIFY)
     keys = resp.json()
     logger.info("Fetched keys: %s" % keys)
     KC_PUBLICKEY = jwk.construct(keys['keys'][0])

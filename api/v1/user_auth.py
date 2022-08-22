@@ -116,4 +116,14 @@ def check_token(user, token_info):
 
 
 def validate_o_auth_token():
-    return '', 501
+    OAUTH2_PROXY_COOKIE_NAME = '_oauth2_proxy'
+    oauth2_cookie = connexion.request.cookies.get(OAUTH2_PROXY_COOKIE_NAME, default=None)
+    if oauth2_cookie:
+        logger.info(f'Checking for {OAUTH2_PROXY_COOKIE_NAME}...')
+        resp = requests.get(url='https://kubernetes.docker.internal/oauth2/userinfo',
+                            cookies={'_oauth2_proxy', oauth2_cookie})
+
+        if resp:
+            user = resp.json()
+            logger.info(f'Found user: {user}')
+

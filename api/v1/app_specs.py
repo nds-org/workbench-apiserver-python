@@ -9,10 +9,16 @@ from pkg.openapi import types
 logger = logging.getLogger('api.v1.app_specs')
 
 
-def import_appspecs(git_repo):
-    # TODO: script out recursive import of JSON files from target git repo
-
+def import_appspecs_recursive():
+    # TODO: Rely on the Helm postinstall / init_container / Job for this
     return
+
+
+# TODO: parameter of "services" keys to include
+# TODO: Should this be a Job instead? init_container?
+def import_appspec(appspec):  # input: single json file
+
+    return appspec
 
 
 # TODO: Is manual validation ever needed?

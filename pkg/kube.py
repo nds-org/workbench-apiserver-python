@@ -298,7 +298,7 @@ def open_exec_userapp_interactive(user, ssid, ws):
         while resp.is_open():
             # Grab command string data from Websocket (without blocking)
             user_input = ws.receive(timeout=0)
-            
+
             # otherwise send to stdin
             if user_input:
                 logger.debug('Sending command: ' + user_input)
@@ -369,7 +369,15 @@ def is_single_namespace():
 #
 #
 def initialize():
-    kubeconfig.load_kube_config()
+    try:
+        kubeconfig.load_incluster_config()
+    except:
+        logger.warning('Failed to load in-cluster config, trying kubeconfig file')
+        try:
+            kubeconfig.load_kube_config()
+        except:
+            logger.warning('Failed to load any cluster config.. this might not work.')
+
     host = kubeconfig.kube_config.Configuration().host
     logging.info("KUBE HOST INFO: {}".format(host))
 
@@ -410,6 +418,9 @@ def init_user(username):
     # create_network_policy(namespace=username, policy_name=username)
     # TODO: create_service_account()
 
+
+def get_init_container(username, spec_key, svc_key):
+    return { 'name': 'wait-for', 'image': 'ghcr.io/groundnuty/k8s-wait-for:v1.6', 'imagePullPolicy': 'Always', 'args': ['pod', '-lworkbench_svc'] }
 
 
 # Creates the Kubernetes resources related to a userapp
@@ -478,10 +489,21 @@ def create_userapp(username, userapp, spec_map):
             create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
 
         if not should_run_as_single_pod:
+            #         - name: wait-for-volume-ceph
+            #           image: ghcr.io/groundnuty/k8s-wait-for:v1.6
+            #           imagePullPolicy: Always
+            #           args:
+            #             - "pod"
+            #             - "-lapp=develop-volume-ceph-krakow"
+            init_containers = [
+
+            ]
+
             # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
             create_deployment(deployment_name=get_resource_name(userapp_id, userapp_key, service_key),
                               namespace=namespace,
                               replicas=0,
+                              init_containers=init_containers,
                               labels=svc_labels,
                               containers=[container])
 
@@ -491,11 +513,14 @@ def create_userapp(username, userapp, spec_map):
                    ingress_hosts=ingress_hosts)
 
     if should_run_as_single_pod:
+
         # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
         create_deployment(deployment_name=get_resource_name(userapp_id, userapp_key),
                           namespace=namespace,
                           replicas=0,
                           labels=labels,
+                          # TODO: how to wait for deps in singlepod mode?
+                          # init_containers=init_containers,
                           containers=containers)
 
 
@@ -521,6 +546,10 @@ def patch_scale_userapp(username, userapp, replicas):
     # FIXME:
     userapp_id = userapp['id']
     namespace = get_resource_namespace(username)
+
+    # TODO: startup dependency validation - do they all exist?
+    # TODO: include wait_for in init_containers
+    # TODO: see https://github.com/groundnuty/k8s-wait-for
 
     should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else config.KUBE_WORKBENCH_SINGLEPOD
     if should_run_as_single_pod:
@@ -760,6 +789,8 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
     deployment_annotations = kwargs['annotations'] if 'annotations' in kwargs else {}
 
     deployment_replicas = kwargs['replicas'] if 'replicas' in kwargs else 0
+
+    init_containers = kwargs['init_containers'] if 'init_containers' in kwargs else []
 
     podspec_annotations = kwargs['pod_annotations'] if 'pod_annotations' in kwargs else {}
 

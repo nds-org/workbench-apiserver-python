@@ -16,6 +16,17 @@ servers:
 
 components:
 
+  # TODO: Use shared error responses throughout
+  responses:
+    BadRequestError:
+      description: Request body was missing or invalid
+    NotFoundError:
+      description: No resource was found that matched the query
+    ForbiddenError:
+      description: Access token lacks required permissions
+    UnauthorizedError:
+      description: Access token is missing or invalid
+
   # Define authentication mechanisms here
   securitySchemes:
     BasicAuth:
@@ -533,6 +544,7 @@ paths:
           description: Not modified
         '401':
           description: Not authorized
+          $ref: '#/components/responses/UnauthorizedError'
         '403':
           description: Forbidden
         '409':

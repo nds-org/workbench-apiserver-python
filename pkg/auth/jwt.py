@@ -94,6 +94,8 @@ def get_token_from_headers(headers=None):
 def get_token_from_cookies(cookies=None):
     if cookies is None:
         cookies = connexion.request.cookies
+    if '_oauth2_proxy' in cookies:
+        return cookies.get('_oauth2_proxy')
     return cookies.get('token') if 'token' in cookies else None
 
 
@@ -115,7 +117,11 @@ def get_username_from_token(token=None):
     if claims is None:
         logger.error("Failed to get username from token")
         raise Unauthorized
-    return claims['sub'] if 'preferred_username' in claims else claims['sub']
+    if 'preferredUsername' in claims:
+        return claims['preferredUsername']
+
+    # Fallback to well-known 'sub' claim
+    return claims['sub']
 
 
 def validate_apikey_querystring(apikey, required_scopes):
@@ -123,11 +129,11 @@ def validate_apikey_querystring(apikey, required_scopes):
     return validate_token(apikey, required_scopes)
 
 
-def validate_auth_header(apikey, required_scopes):
+def validate_auth_header(auth_header, required_scopes):
     #logger.debug("Checking for auth (header): %s" % apikey)
     # format: bearer <jwt>
     # we only want the jwt, strip out the literal "bearer"
-    token = apikey.split(" ")[-1]
+    token = auth_header.split(" ")[-1]
 
     return validate_token(token, required_scopes)
 
