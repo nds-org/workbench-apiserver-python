@@ -5,11 +5,14 @@
   "keycloak": {
     "clientId": "workbench-local",
     "clientSecret": "",
-    "hostname": "http://localhost:8080",
+    "hostname": "https://kubernetes.docker.internal/auth",
     "realmName": "workbench-dev"
   },
+  "oauth": {
+    "userinfoUrl": "https://kubernetes.docker.internal/oauth2/userinfo"
+  },
   "mongo": {
-    "uri": "mongodb://localhost:27017/ndslabs",
+    "uri": "mongodb://workbench:workbench@kubernetes.docker.internal:30017/ndslabs?authSource=admin",
     "db": "ndslabs"
   },
   "specs": {

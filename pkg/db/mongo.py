@@ -50,7 +50,7 @@ class MongoStore:
 
     # Sets up a new MongoClient with the given URI
     def __init__(self):
-        self.client = MongoClient(config.MONGO_URI, authSource='admin')
+        self.client = MongoClient(config.MONGO_URI)
         self.db = self.client[config.MONGO_DB]
 
     # RefreshToken

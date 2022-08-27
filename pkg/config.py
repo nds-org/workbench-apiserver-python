@@ -34,10 +34,6 @@ if not loaded_backend:
             print(i)
         loaded_backend = True
 
-# Internal messaging
-ZMQ_SOCKET_SERVER_URI = 'tcp://*:5001'
-ZMQ_SOCKET_CLIENT_URI = 'tcp://localhost:5002'
-
 SSL_VERIFY = os.getenv('INSECURE_SSL_VERIFY', 'false').lower() in ('true', '1', 't')
 
 # v1
@@ -110,6 +106,8 @@ def download_remote_swagger_to_temp_file(temp_file_name='swagger-tmp.yml'):
         raise SystemExit(e)
 
 
+OAUTH_USERINFO_URL = os.getenv('OAUTH_USERINFO_URL', backend_config['oauth']['userinfoUrl'])
+
 # Use central Keycloak
 KEYCLOAK_HOST = os.getenv('KEYCLOAK_HOST', backend_config['keycloak']['hostname'])
 KEYCLOAK_REALM = os.getenv('KEYCLOAK_REALM', backend_config['keycloak']['realmName'])
@@ -117,21 +115,15 @@ KEYCLOAK_CLIENT_ID = os.getenv('KEYCLOAK_CLIENT_ID', backend_config['keycloak'][
 KEYCLOAK_CLIENT_SECRET = os.getenv('KEYCLOAK_CLIENT_SECRET', backend_config['keycloak']['clientSecret'] if 'clientSecret' in backend_config['keycloak'] else '')
 
 KC_REALM_URL = '%s/realms/%s' % (KEYCLOAK_HOST, KEYCLOAK_REALM)
-KC_OIDC_PREFIX = '%s/protocol/openid-connect' % KC_REALM_URL
-KC_TOKEN_URL = "%s/token" % KC_OIDC_PREFIX
-KC_USERINFO_URL = "%s/userinfo" % KC_OIDC_PREFIX
-KC_LOGOUT_URL = "%s/logout" % KC_OIDC_PREFIX
-KC_AUTH_URL = "%s/auth" % KC_OIDC_PREFIX
 
 # system-generated params
 KC_ALGORITHM = os.getenv('KC_ALGORITHM', 'RS256')
-KC_GRANT_TYPE = 'password'
-KC_SCOPE = 'profile email openid workbench-accounts'
+KC_SCOPE = 'profile email openid roles'
 
 # system-specific config
 # (create this Mapping in Keycloak)
-KC_ISSUER = ''
-KC_AUDIENCE = 'workbench-local'
+KC_ISSUER = os.getenv('KC_ISSUER', '')
+KC_AUDIENCE = os.getenv('KC_AUDIENCE', 'workbench-local')
 
 SOCK_PING_INTERVAL = int(os.getenv('SOCK_PING_INTERVAL', 25))
 max_msg_size = os.getenv('SOCK_MAX_MESSAGE_SIZE', None)

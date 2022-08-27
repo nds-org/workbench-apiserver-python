@@ -8,14 +8,12 @@ import time
 import threading
 
 import urllib3
-import zmq
 from kubernetes import watch, client, config as kubeconfig
 from kubernetes.stream import stream
 from kubernetes.client import ApiException
 from requests import HTTPError
 
 from pkg import config
-from pkg.auth import jwt
 from pkg.config import KUBE_WORKBENCH_NAMESPACE, KUBE_WORKBENCH_RESOURCE_PREFIX
 from pkg.db.datastore import data_store
 from pkg.exceptions import AppSpecNotFoundError

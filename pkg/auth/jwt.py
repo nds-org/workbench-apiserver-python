@@ -2,7 +2,7 @@ import connexion
 import logging
 
 import six
-from pkg.auth import keycloak
+from pkg.auth import keycloak, oauth2
 from jose import jwt
 from jose.exceptions import JWTError, JWSError, JWKError, ExpiredSignatureError
 from werkzeug.exceptions import Forbidden
@@ -68,21 +68,9 @@ def get_token():
     for token in [
         get_token_from_cookies(),
         get_token_from_headers(),
-        get_token_from_querystring(),
-        get_token_from_auth_header()
     ]:
         if token is not None:
             return token
-
-
-def get_token_from_auth_header(headers=None):
-    if headers is None:
-        headers = connexion.request.headers
-    if 'Authorization' in headers:
-        bearer_str = headers.get('Authorization')
-        # If the word "bearer" is included, return everything after that literal
-        return bearer_str.split(' ')[-1] if bearer_str.lower().startswith('bearer ') else bearer_str
-    return None
 
 
 def get_token_from_headers(headers=None):
@@ -94,15 +82,7 @@ def get_token_from_headers(headers=None):
 def get_token_from_cookies(cookies=None):
     if cookies is None:
         cookies = connexion.request.cookies
-    if '_oauth2_proxy' in cookies:
-        return cookies.get('_oauth2_proxy')
     return cookies.get('token') if 'token' in cookies else None
-
-
-def get_token_from_querystring(args=None):
-    if args is None:
-        args = connexion.request.args
-    return args.get('token') if 'token' in args else None
 
 
 def get_username_from_token(token=None):
@@ -139,8 +119,7 @@ def validate_auth_header(auth_header, required_scopes):
 
 
 def validate_apikey_header(apikey, required_scopes):
-    #logger.debug("Checking for auth (apikey): %s" % apikey)
-    #token = get_token_from_cookies()
+    logger.debug("Checking for auth (X-API-KEY): %s" % apikey)
     return validate_token(apikey, required_scopes)
 
 
@@ -230,6 +209,3 @@ def validate_scopes(required_scopes, claims):
 def tokeninfo(token):
     logger.info("Decoding token: %s" % token)
     return safe_decode(token)
-
-
-
