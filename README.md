@@ -11,10 +11,10 @@ With Docker, there is no need to clone the source in order to run the full appli
 
 To run the pre-built Docker image:
 ```bash
-docker run -itd -e KEYCLOAK_HOST="https://gateway.docker.internal/auth" \
-                -e MONGO_URI="mongodb://gateway.docker.internal:27017/ndslabs?authSource=admin" \
-                -p 5000:5000 \
-                ndslabs/apiserver:python
+$ docker run -itd -e KEYCLOAK_HOST="https://gateway.docker.internal/auth" \
+                  -e MONGO_URI="mongodb://gateway.docker.internal:27017/ndslabs?authSource=admin" \
+                  -p 5000:5000 \
+                  ndslabs/apiserver:python
 ```
 
 ### Configuration
@@ -66,22 +66,22 @@ TODOs and/or proposed or currently unused config items.
 ## Development
 Clone this repo:
 ```bash
-git clone https://github.com/nds-org/workbench-apiserver-python
+$ git clone https://github.com/nds-org/workbench-apiserver-python
 ```
 
 Install Python dependencies:
 ```bash
-pip install -r requirements.txt
+$ pip install -r requirements.txt
 ```
 
 Run the application locally (for testing):
 ```bash
-python server.py
+$ python server.py
 ```
 
 To rebuild the Docker image from source:
 ```bash
-docker build -t ndslabs/apiserver:python .
+$ docker build -t ndslabs/apiserver:python .
 ```
 
 ## Generating CRDs
@@ -96,10 +96,10 @@ To see a full list of available applications, see https://github.com/nds-org/nds
 
 If you modify the script locally, you can rebuild the image:
 ```bash
-docker build -t YOUR_USERNAME/specloader .
+$ docker build -t YOUR_USERNAME/specloader .
 ```
 
 NOTE: You **must** push the image to a public location to use it within your cluster
 ```bash
-docker push YOUR_USERNAME/specloader
+$ docker push YOUR_USERNAME/specloader
 ```
