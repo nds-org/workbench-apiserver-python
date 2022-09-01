@@ -65,3 +65,18 @@ docker build -t ndslabs/apiserver:python .
 Side note: the Swagger spec provided in this project generates experimental CRDs for use in Kubernetes. These CRDs are not currently utilized by the application itself, and offered for experimentation only. CAUTION: These CRDs and the patterns surrounding them may change in the near future as we work to support them within the Python application.
 
 See https://github.com/bodom0015/swagger-k8s-crd-codegen for details
+
+## Importing Specs
+In the `jobs/` folder is a small script/image that can be used to populate the database using a folder of spec JSONs.
+
+To see a full list of available applications, see https://github.com/nds-org/ndslabs-specs
+
+If you modify the script locally, you can rebuild the image:
+```bash
+docker build -t YOUR_USERNAME/specloader .
+```
+
+NOTE: You **must** push the image to a public location to use it within your cluster
+```bash
+docker push YOUR_USERNAME/specloader
+```
