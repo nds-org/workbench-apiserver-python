@@ -12,7 +12,7 @@
     "userinfoUrl": "https://kubernetes.docker.internal/oauth2/userinfo"
   },
   "mongo": {
-    "uri": "mongodb://workbench:workbench@kubernetes.docker.internal:30017/ndslabs?authSource=admin",
+    "uri": "mongodb://workbench:workbench@workbench-mongodb.workbench.svc.cluster.local:27017/ndslabs?authSource=admin",
     "db": "ndslabs"
   },
   "specs": {

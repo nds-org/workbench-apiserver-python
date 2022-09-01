@@ -238,6 +238,14 @@ class KubeEventWatcher:
                     userapp_id = segments[0]
                     username = labels['user']
                     # sid-stackkey-svckey-deploymentsuffix-podsuffix => we want 3rd to last
+                    if config.KUBE_WORKBENCH_SINGLEPOD:
+
+                        # TODO: Status events for singlepod mode
+                        logger.warning('Workbench cannot yet update stack status automatically when singlepod=True')
+                        continue
+
+                    # Not running in singlepod mode, so names have 5 segments instead
+                    # sid-stackkey-svckey-deploymentsuffix-podsuffix => we want 3rd to last
                     service_key = segments[-3]
 
                     type = event['type']
@@ -253,7 +261,7 @@ class KubeEventWatcher:
                     service_status = determine_new_status(type, phase)
                     write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip, service_endpoints)
 
-                    logger.debug(
+                    logger.info(
                         'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s' % (userapp_id, service_key, type, phase, service_status))
             except urllib3.exceptions.ProtocolError as e:
                 logger.error('Connection to Kube API has been lost. Killing application.')
@@ -442,7 +450,7 @@ def create_userapp(username, userapp, spec_map):
         app_spec = spec_map.get(service_key, None)
         svc_labels = labels.copy()
         svc_labels['workbench-svc'] = service_key
-        print("Created svc_labels: " + str(svc_labels))
+        logger.info("Created svc_labels: " + str(svc_labels))
         if app_spec is None:
             logger.error("Failed to find app_spec: %s" % service_key)
             raise AppSpecNotFoundError("Failed to find app_spec: %s" % service_key)
@@ -539,9 +547,6 @@ def update_userapp_replicas(username, userapp_id, replicas):
 
 
 def patch_scale_userapp(username, userapp, replicas):
-
-
-    # FIXME:
     userapp_id = userapp['id']
     namespace = get_resource_namespace(username)
 
@@ -552,15 +557,17 @@ def patch_scale_userapp(username, userapp, replicas):
     should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else config.KUBE_WORKBENCH_SINGLEPOD
     if should_run_as_single_pod:
         deployment_name = get_resource_name(userapp_id, userapp['key'])
-        return patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas)
+        patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas)
+        return True
     else:
         results = []
         # TODO: how to check results
         for stack_service in userapp['services']:
             service_key = stack_service['service']
-            name = get_resource_name(userapp_id, userapp['key'], service_key)
-            patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
-        return True
+            deployment_name = get_resource_name(userapp_id, userapp['key'], service_key)
+            results.append(patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas))
+        return False not in results
+
 
 # Cleans up the Kubernetes resources related to a userapp
 def destroy_userapp(username, userapp):
@@ -633,19 +640,23 @@ def get_deployment(name, namespace):
 def patch_scale_deployment(deployment_name, namespace, replicas) -> bool:
     # No-op if we can't find the deployment
     deployment = get_deployment(name=deployment_name, namespace=namespace)
+    logger.info(f'Patching {deployment_name} to replicas={str(replicas)}')
     if deployment is None:
         # TODO: Raise an error here?
+        logger.error("Failed to find deployment: " + str(deployment_name))
         return False
 
     # No-op if we have our desired number of replicas
-    current_repl = deployment.spec.replicas
-    if current_repl == replicas:
-        logger.debug("No-op for setting replicas number: %d -> %d" % (current_repl, replicas))
-        return False
+    #current_repl = deployment.spec.replicas
+    #if current_repl == replicas:
+    #    logger.debug("No-op for setting replicas number: %d -> %d" % (current_repl, replicas))
+    #    return False
 
     # Query number of replicas
-    return client.AppsV1Api().patch_namespaced_deployment_scale(namespace=namespace, name=deployment_name,
-                                                                body={'spec': {'replicas': replicas}})
+    result = client.AppsV1Api().patch_namespaced_deployment_scale(namespace=namespace, name=deployment_name,
+                                                                  body={'spec': {'replicas': replicas}})
+    logger.info("Patch Result: " + str(result))
+    return result
 
 
 def create_configmap(configmap_name, configmap_data, **kwargs):

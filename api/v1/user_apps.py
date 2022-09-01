@@ -60,13 +60,17 @@ def create_userapp(stack, user, token_info):
     stack_id = generate_unique_id(user)
     stack['id'] = stack['_id'] = stack_id
 
+    if stack_id is None:
+        return {'error': 'Failed to generate unique ID' }, 500
+    if user is None:
+        return {'error': 'Failed to create userapp: no user specified' }, 400
+
     # Set stack service ID on each dependency
     for svc in stack['services']:
         service_key = svc['service']
         ssid = '%s-%s' % (stack_id, service_key)
         svc['id'] = ssid
         svc['endpoints'] = []
-
 
     spec_map = to_spec_map(data_store.fetch_all_appspecs_for_user(user))
 
@@ -86,34 +90,30 @@ def create_userapp(stack, user, token_info):
         return {'error': 'Failed to create userapp: %s' % str(e)}, 400
 
 
-def get_userapp_by_id(stack_id):
-    token = jwt.get_token()
-    claims = jwt.safe_decode(token)
-    namespace = claims['username']
-
-    userapp = data_store.retrieve_userapp_by_id(namespace, userapp_id=stack_id)
+def get_userapp_by_id(stack_id, user, token_info):
+    userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id)
 
     return userapp, 200
 
 
 def update_userapp(stack_id, stack, user, token_info):
     if stack['id'] != stack_id:
-        return {'error': 'Bad Request: ID mismatch'}, 400, jwt.get_token_cookie(user)
+        return {'error': 'Bad Request: ID mismatch'}, 400
     if stack['creator'] != user:
-        return {'error': 'Only the owner may modify a userapp'}, 403, jwt.get_token_cookie(user)
+        return {'error': 'Only the owner may modify a userapp'}, 403
 
     updated = data_store.update_userapp(stack)
     # TODO: check matched_count vs modified_count?
-    return data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id), 200, jwt.get_token_cookie(user)
+    return data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id), 200
 
 
 def delete_userapp(stack_id, user, token_info):
     # Verify that this user is the owner
     userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id)
     if userapp is None:
-        return {'error': 'No userapp found with id=%s' % stack_id}, 404, jwt.get_token_cookie(user)
+        return {'error': 'No userapp found with id=%s' % stack_id}, 404
     if userapp['creator'] != user:
-        return {'error': 'Only the owner may delete a userapp'}, 403, jwt.get_token_cookie(user)
+        return {'error': 'Only the owner may delete a userapp'}, 403
 
     try:
         kube.destroy_userapp(username=user, userapp=userapp)
@@ -123,23 +123,20 @@ def delete_userapp(stack_id, user, token_info):
 
         # Verify deletion was successful using deleted_count
         if deleted.deleted_count > 0:
-            return 204, jwt.get_token_cookie(user)
+            return 204
         else:
-            return {'error': 'Failed to delete userapp=%s: deletion failed' % stack_id}, 500, jwt.get_token_cookie(user)
+            return {'error': 'Failed to delete userapp=%s: deletion failed' % stack_id}, 500
     except Exception as e:
         logger.error('Failed to delete userapp: %s' % str(e))
-        return {'error': 'Failed to delete userapp: %s' % str(e)}, 500, jwt.get_token_cookie(user)
+        return {'error': 'Failed to delete userapp: %s' % str(e)}, 500
 
 
 def rename_userapp(stack_id, name, user, token_info):
-    token = jwt.get_token()
-    claims = jwt.safe_decode(token)
-    username = jwt.get_username_from_token(token)
     userapp = data_store.retrieve_userapp_by_id(stack_id)
 
     # Verify that this user is the owner
-    if userapp['creator'] != username:
-        return {'error': 'Only the owner may rename a userapp'}, 403, jwt.get_token_cookie(user)
+    if userapp['creator'] != user:
+        return {'error': 'Only the owner may rename a userapp'}, 403
 
     # Change the name
     userapp['name'] = name
@@ -149,7 +146,7 @@ def rename_userapp(stack_id, name, user, token_info):
 def get_stack_service_logs(stack_service_id, user, token_info):
     segments = stack_service_id.split('-')
     if segments.length != 2:
-        return {'error': 'Malformed stack service id'}, 400, jwt.get_token_cookie(user)
+        return {'error': 'Malformed stack service id'}, 400
 
     stack_id = segments[0]
     service_key = segments[1]
@@ -159,14 +156,14 @@ def get_stack_service_logs(stack_service_id, user, token_info):
 
     # Validation
     if userapp is None:
-        return {'error': 'Stack ID=%s not found' % stack_id}, 404, jwt.get_token_cookie(user)
+        return {'error': 'Stack ID=%s not found' % stack_id}, 404
 
     # Find the target in the app's service list
     for s in userapp.services:
         if s.key == service_key:
             return s.logs, 200
 
-    return {'error': 'Service key %s not found on Stack ID %s' % (service_key, stack_id)}, 404, jwt.get_token_cookie(user)
+    return {'error': 'Service key %s not found on Stack ID %s' % (service_key, stack_id)}, 404
 
 
 def quickstart_stack(key, user, token_info):
@@ -196,14 +193,14 @@ def start_stack(stack_id, user, token_info):
     #data_store.update_userapp(userapp)
     #return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
 
-    # TODO: Eventually, Pod is Running and event watchers
+    # Eventually, Pod is Running and event watchers
     #    should update userapp state to STARTED
     if kube.patch_scale_userapp(username=user, userapp=userapp, replicas=1):
         data_store.update_userapp(userapp)
-        return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
+        return {'status': userapp['status']}, 202
     else:
         return {'status': 'error',
-                'error': 'failed to set replicas=1 for %s' % stack_id}, 400, jwt.get_token_cookie(user)
+                'error': 'failed to set replicas=1 for %s' % stack_id}, 400
 
 
 def stop_stack(stack_id, user, token_info):
@@ -214,6 +211,10 @@ def stop_stack(stack_id, user, token_info):
     if userapp['creator'] != user:
         return {'error': 'Only the owner may shutdown a userapp'}, 403, jwt.get_token_cookie(user)
 
+    status = userapp['status']
+    if status != 'stopping' and status != 'stopped':
+        userapp['status'] = 'stopping'
+
     #kube.patch_scale_userapp(username=user, userapp=userapp, replicas=0)
     #data_store.update_userapp(userapp)
     #return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
@@ -221,10 +222,6 @@ def stop_stack(stack_id, user, token_info):
     # Eventually, Pod is Running and event watchers
     #    should update userapp state to STOPPED
     if kube.patch_scale_userapp(username=user, userapp=userapp, replicas=0):
-        status = userapp['status']
-        if status != 'stopping' and status != 'stopped':
-            userapp['status'] = 'stopping'
-
         data_store.update_userapp(userapp)
         return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
     else:
@@ -302,13 +299,9 @@ def get_config_from_appspec(appspec):
     return appspec['config']
 
 
-def get_stack_configs(services=None):
-    token = jwt.get_token()
-    claims = jwt.safe_decode(token)
-    username = jwt.get_username_from_token(token)
-
+def get_stack_configs(user, token_info, services=None):
     configs = []
-    all_appspecs = data_store.fetch_all_appspecs_for_user(username)
+    all_appspecs = data_store.fetch_all_appspecs_for_user(user)
     all_appspec_keys = list(map(get_key_from_appspec, all_appspecs))
 
     if services is None:

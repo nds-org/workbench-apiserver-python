@@ -167,6 +167,56 @@ paths:
           description: OK
         '401':
           description: Unauthorized - missing or invalid login token
+
+
+
+  /services/all:
+    get:
+      security:
+        - KeycloakOIDC: []
+        - OAuth2ProxyCookie: []
+      tags:
+        - app spec
+      operationId: 'list_services_all'
+      x-swagger-router-controller: 'api.v1.app_specs'
+      description: |
+        Retrieves a site-wide list of all available service definitions,
+        including those added by the user.
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/Service'
+        '401':
+          description: Unauthorized - missing or invalid login token
+          schema:
+            $ref: '#/definitions/Error'
+
+  /services/mine:
+    get:
+      security:
+        - KeycloakOIDC: []
+        - OAuth2ProxyCookie: []
+      tags:
+        - app spec
+      operationId: 'list_services_for_user'
+      x-swagger-router-controller: 'api.v1.app_specs'
+      description: |
+        Retrieves a list of available service definitions that have been
+        added by the current user.
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/Service'
+        '401':
+          description: Unauthorized - missing or invalid login token
+          schema:
+            $ref: '#/definitions/Error'
   /services:
     get:
       tags:
@@ -175,12 +225,6 @@ paths:
       x-swagger-router-controller: 'api.v1.app_specs'
       description: |
         Retrieves a site-wide list of available service definitions.
-      parameters:
-        - name: catalog
-          in: query
-          description: 'Filter list for catalog (user, system, all)'
-          required: false
-          type: string
       responses:
         '200':
           description: OK
@@ -231,6 +275,9 @@ paths:
     parameters:
       - $ref: '#/parameters/service_id'
     get:
+      security:
+        - KeycloakOIDC: []
+        - OAuth2ProxyCookie: []
       tags:
         - app spec
       operationId: 'get_service_by_id'

@@ -99,6 +99,8 @@ def get_username_from_token(token=None):
         raise Unauthorized
     if 'preferredUsername' in claims:
         return claims['preferredUsername']
+    if 'username' in claims:
+        return claims['username']
 
     # Fallback to well-known 'sub' claim
     return claims['sub']

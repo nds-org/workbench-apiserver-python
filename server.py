@@ -66,6 +66,7 @@ if __name__ == '__main__':
     CORS(app.app, resources={r"/api/*": {"origins": "*"}})
 
     try:
+        logger.info(f'Connecting to MongoDB: {config.MONGO_URI} ({config.MONGO_DB})')
         app.run(port=5000, host='0.0.0.0', server='flask', debug=debug)
     finally:
         watcher.close()

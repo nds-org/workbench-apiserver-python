@@ -18,11 +18,10 @@ logger = logging.getLogger('pkg.auth.oauth2')
 #     "role:workbench-user",                # Realm Roles
 #     "role:workbench-local:client-role"    # Client Roles
 #   ],
-#   "username": "test"
+#   "sub": "test"
 # }
 # TODO: x-tokenInfoUrl can't handle insecure SSL
 def userinfo(access_token) -> dict:
-    logger.info("Verifying OAuth token: " + access_token)
     try:
         resp = requests.get(url=OAUTH_USERINFO_URL,
                             verify=SSL_VERIFY,
@@ -41,7 +40,7 @@ def userinfo(access_token) -> dict:
             'groups': roles,
             # 'family_name': user['family_name'],
             # 'given_name': user['given_name'],
-            'username': user['preferredUsername']
+            'sub': user['preferredUsername']
         }
     except Exception as e:
         logger.warning("OAuth2 token verification failed: " + str(e))
@@ -56,5 +55,4 @@ def get_token_from_cookies(cookies=None):
 
 def validate_auth_cookie(cookies, required_scopes):
     token = get_token_from_cookies()
-    logger.info("Found OAuth2 Token: " + token)
     return userinfo(token)

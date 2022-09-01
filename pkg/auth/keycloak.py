@@ -18,7 +18,7 @@ logger = logging.getLogger("pkg.auth.keycloak")
 #     "role:workbench-user",                # Realm Roles
 #     "role:workbench-local:client-role"    # Client Roles
 #   ],
-#   "username": "test"
+#   "sub": "test"
 # }
 # TODO: x-tokenInfoUrl can't handle insecure SSL
 def userinfo(access_token) -> dict:
@@ -60,7 +60,7 @@ def userinfo(access_token) -> dict:
             'groups': groups,
             # 'family_name': user['family_name'],
             # 'given_name': user['given_name'],
-            'username': user['preferred_username']
+            'sub': user['preferred_username']
         }
     except Exception as e:
         logger.warning("Keycloak token verification failed: " + str(e))

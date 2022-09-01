@@ -13,26 +13,20 @@ from jose.utils import base64url_decode
 logger = logging.getLogger('config')
 DEBUG = os.getenv('DEBUG', 'false').lower() in ('true', '1', 't')
 
+BACKEND_CFG_PATH = os.getenv('BACKEND_CFG_PATH', './env/backend.json')
+FRONTEND_CFG_PATH = os.getenv('FRONTEND_CFG_PATH', './env/frontend.json')
+
 DOMAIN = 'local.ndslabs.org'
 
 # Read app/env/backend.json and frontend/json
-loaded_backend = False
-loaded_frontend = False
+with open(FRONTEND_CFG_PATH) as f:
+    frontend_config = json.load(f)
+    logger.warning("frontend config: " + str(frontend_config))
 
-if not loaded_frontend:
-    with open('./env/frontend.json') as f:
-        frontend_config = json.load(f)
-        for i in frontend_config.items():
-            print(i)
-        loaded_frontend = True
-
-if not loaded_backend:
-    with open('./env/backend.json') as f:
-        # returns JSON object as a dict
-        backend_config = json.load(f)
-        for i in backend_config.items():
-            print(i)
-        loaded_backend = True
+with open(BACKEND_CFG_PATH) as b:
+    # returns JSON object as a dict
+    backend_config = json.load(b)
+    logger.warning("backend config: " + str(backend_config))
 
 SSL_VERIFY = os.getenv('INSECURE_SSL_VERIFY', 'false').lower() in ('true', '1', 't')
 
@@ -80,7 +74,7 @@ CALLBACK_URL_TEMPLATE = os.getenv('CALLBACK_URL_TEMPLATE', CALLBACK_HOST + '/api
 # v2?
 KUBE_WORKBENCH_RESOURCE_PREFIX = ''
 KUBE_WORKBENCH_NAMESPACE = os.getenv('KUBE_WORKBENCH_NAMESPACE', 'workbench')
-KUBE_WORKBENCH_SINGLEPOD = os.getenv('KUBE_WORKBENCH_SINGLEPOD', 'true').lower() in ('true', '1', 't')
+KUBE_WORKBENCH_SINGLEPOD = os.getenv('KUBE_WORKBENCH_SINGLEPOD', 'false').lower() in ('true', '1', 't')
 KUBE_PVC_STORAGECLASS = os.getenv('hostpath', None)
 
 SWAGGER_URL = os.getenv('SWAGGER_URL', 'openapi/swagger-v1.yml')

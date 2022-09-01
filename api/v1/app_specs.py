@@ -78,50 +78,25 @@ def create_service(service, user, token_info):
             return {'error': 'Spec key already exists: %s' % service_key}, 409, jwt.get_token_cookie(user)
 
 
-def list_services(catalog='all'):
-    logging.info("Get services with catalog - "+catalog)
-
-    try:
-        token = jwt.get_token()
-        claims = jwt.safe_decode(token)
-        username = jwt.get_username_from_token(token)
-
-        # Attempt user lookup, if possible
-        if catalog == 'user':
-            services = data_store.fetch_user_appspecs(username)
-            return services, 200, jwt.get_token_cookie(username)
-        else:  # catalog == all or anything else
-            services = data_store.fetch_all_appspecs_for_user(username)
-            return services, 200, jwt.get_token_cookie(username)
-    except Exception as e:
-        logger.debug('Skipping user catalog check: %s' % str(e))
-
-    # User was not authed, but we may still be able to fulfill their request
-    if catalog == 'all' or catalog == 'system':
-        services = data_store.fetch_system_appspecs()
-        return services, 200
-    elif catalog == 'user':
-        return {'error': 'Must login to request user catalog'}, 401
+def list_services_for_user(user, token_info):
+    return data_store.fetch_user_appspecs(user), 200
 
 
-def get_service_by_id(service_id):
-    try:
-        token = jwt.get_token()
-        username = jwt.get_username_from_token(token)
+def list_services():
+    return data_store.fetch_system_appspecs(), 200
 
-        # User spec not found, check system catalog
-        appspec = data_store.retrieve_user_appspec_by_key(username, service_id)
-        if appspec is not None:
-            return appspec, 200, jwt.get_token_cookie(username)
-    except Exception as e:
-        logger.debug('Skipping user catalog check: %s' % str(e))
 
+def list_services_all(user, token_info):
+    return data_store.fetch_system_appspecs() + data_store.fetch_user_appspecs(user), 200
+
+
+def get_service_by_id(service_id, user, token_info):
     # No token (or appspec not found), but we can still check system catalog
-    appspec = data_store.retrieve_system_appspec_by_key(service_id)
+    appspec = data_store.retrieve_appspec_by_key(service_id)
     if appspec is not None:
         return appspec, 200
     else:
-        return {'error': 'Spec key=%s not found' % service_id}, 404, jwt.get_token_cookie(user)
+        return {'error': 'Spec key=%s not found' % service_id}, 404
 
 
 def update_service(service_id, service, user, token_info):
