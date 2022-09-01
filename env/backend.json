@@ -1,7 +1,11 @@
 {
-  "domain": "kubernetes.docker.internal",
-  "inactivity_timeout": 480,
+  "debug": true,
   "insecure_ssl_verify": "false",
+  "swagger_url": "openapi/swagger-v1.yml",
+  "namespace": "workbench",
+  "domain": "kubernetes.docker.internal",
+  "singlepod": false,
+  "storage_class": null,
   "keycloak": {
     "clientId": "workbench-local",
     "clientSecret": "",
@@ -15,6 +19,12 @@
     "uri": "mongodb://workbench:workbench@workbench-mongodb.workbench.svc.cluster.local:27017/ndslabs?authSource=admin",
     "db": "ndslabs"
   },
+
+
+
+
+  "timeout": 30,
+  "inactivity_timeout": 480,
   "specs": {
     "branch": "master",
     "repo": "https://github.com/nds-org/ndslabs-specs.git"
@@ -31,7 +41,6 @@
       "volume_path": "/tmp/shared"
     }
   },
-  "timeout": 30,
   "userapps": {
     "ingress": {
       "annotations": {

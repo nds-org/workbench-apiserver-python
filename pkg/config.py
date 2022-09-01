@@ -11,12 +11,10 @@ from jose.utils import base64url_decode
 
 
 logger = logging.getLogger('config')
-DEBUG = os.getenv('DEBUG', 'false').lower() in ('true', '1', 't')
 
 BACKEND_CFG_PATH = os.getenv('BACKEND_CFG_PATH', './env/backend.json')
 FRONTEND_CFG_PATH = os.getenv('FRONTEND_CFG_PATH', './env/frontend.json')
 
-DOMAIN = 'local.ndslabs.org'
 
 # Read app/env/backend.json and frontend/json
 with open(FRONTEND_CFG_PATH) as f:
@@ -28,56 +26,25 @@ with open(BACKEND_CFG_PATH) as b:
     backend_config = json.load(b)
     logger.warning("backend config: " + str(backend_config))
 
-SSL_VERIFY = os.getenv('INSECURE_SSL_VERIFY', 'false').lower() in ('true', '1', 't')
-
-# v1
-DEFAULT_ACCT_MEM = '8GB'
-DEFAULT_ACCT_CPU = '2M'
-
-DEFAULT_MEM_REQ = '512MB'
-DEFAULT_MEM_LIM = '1GB'
-DEFAULT_CPU_REQ = '100m'
-DEFAULT_CPU_LIM = '500m'
-
-DEV_MEM_REQ = '1GB'
-DEV_MEM_LIM = '2GB'
-DEV_CPU_REQ = '500m'
-DEV_CPU_LIM = '1M'
-
-ADMIN_MEM_REQ = '512MB'
-ADMIN_MEM_LIM = '1GB'
-ADMIN_CPU_REQ = '100M'
-ADMIN_CPU_LIM = '2M'
-
-# EtcdStore
-ETCD_HOST = os.getenv('ETCD_HOST', '127.0.0.1')
-ETCD_PORT = os.getenv('ETCD_PORT', 4001)
-ETCD_BASE_PATH = os.getenv('ETCD_BASE_PATH', '/ndslabs')
+# Read from env vars or fall back to values in backend.json config file
+DEBUG = os.getenv('DEBUG', backend_config['debug'] if 'debug' in backend_config else 'false').lower() in ('true', '1', 't')
+DOMAIN = os.getenv('DOMAIN', backend_config['domain'] if 'domain' in backend_config else 'local.ndslabs.org')
+SSL_VERIFY = os.getenv('INSECURE_SSL_VERIFY',
+                       backend_config['insecure_ssl_verify'] if 'insecure_ssl_verify' in backend_config else 'false'
+                       ).lower() in ('true', '1', 't')
 
 # MongoStore
 MONGO_URI = os.getenv('MONGO_URI', backend_config['mongo']['uri'])
 MONGO_DB = os.getenv('MONGO_DB', backend_config['mongo']['db'] if 'db' in backend_config['mongo'] else 'ndslabs')
 
 
-# Kubernetes
-KUBE_HOST = os.getenv('KUBE_HOST', 'localhost')
-KUBE_PORT = os.getenv('KUBE_PORT', 6443)
-KUBE_TOKENPATH = os.getenv('KUBE_TOKENPATH', '/run/secrets/kubernetes.io/serviceaccount/token')
-#KUBE_QPS = os.getenv('KUBE_QPS', 50)
-#KUBE_BURST = os.getenv('KUBE_BURST', 100)
-
-
-CALLBACK_SERVICE_ACCOUNT_JWT = os.getenv('CALLBACK_SERVICE_ACCOUNT_JWT', '')
-CALLBACK_HOST = os.getenv('CALLBACK_HOST', 'http://localhost:5000')
-CALLBACK_URL_TEMPLATE = os.getenv('CALLBACK_URL_TEMPLATE', CALLBACK_HOST + '/api/v1/stacks/%s/status')
-
 # v2?
-KUBE_WORKBENCH_RESOURCE_PREFIX = ''
-KUBE_WORKBENCH_NAMESPACE = os.getenv('KUBE_WORKBENCH_NAMESPACE', 'workbench')
+KUBE_WORKBENCH_RESOURCE_PREFIX = os.getenv('KUBE_WORKBENCH_RESOURCE_PREFIX', backend_config['resource_prefix'] if 'resource_prefix' in backend_config else '')
+KUBE_WORKBENCH_NAMESPACE = os.getenv('KUBE_WORKBENCH_NAMESPACE', backend_config['namespace'] if 'namespace' in backend_config else '')
 KUBE_WORKBENCH_SINGLEPOD = os.getenv('KUBE_WORKBENCH_SINGLEPOD', 'false').lower() in ('true', '1', 't')
-KUBE_PVC_STORAGECLASS = os.getenv('hostpath', None)
+KUBE_PVC_STORAGECLASS = os.getenv('KUBE_PVC_STORAGECLASS', backend_config['storage_class'] if 'storage_class' in backend_config else None)
 
-SWAGGER_URL = os.getenv('SWAGGER_URL', 'openapi/swagger-v1.yml')
+SWAGGER_URL = os.getenv('SWAGGER_URL', backend_config['swagger_url'] if 'swagger_url' in backend_config else 'openapi/swagger-v1.yml')
 
 
 # Downloads a remote swagger spec from the configured SWAGGER_URL and save it to a temp file.
