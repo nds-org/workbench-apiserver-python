@@ -262,7 +262,7 @@ class KubeEventWatcher:
                     write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip, service_endpoints)
 
                     logger.info(
-                        'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s' % (userapp_id, service_key, type, phase, service_status))
+                        'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s  endpoints=%s' % (userapp_id, service_key, type, phase, service_status, str(service_endpoints)))
             except urllib3.exceptions.ProtocolError as e:
                 logger.error('Connection to Kube API has been lost. Killing application.')
                 sys.exit(1)
@@ -575,11 +575,14 @@ def destroy_userapp(username, userapp):
     userapp_key = userapp['key']
     name = get_resource_name(userapp_id, userapp_key)
     namespace = get_resource_namespace(username)
+
+    logger.debug(f'Deleting Ingress: {name}')
     delete_ingress(name=name, namespace=namespace)
     # TODO: networkpolicy? (currently unused)
 
-    should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else True
+    should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else config.KUBE_WORKBENCH_SINGLEPOD
     if should_run_as_single_pod:
+        logger.debug(f'Deleting Deployment (singlepod): {name}')
         delete_deployment(name=name, namespace=namespace)
 
 
@@ -587,8 +590,11 @@ def destroy_userapp(username, userapp):
         service_key = stack_service['service']
         name = get_resource_name(userapp_id, userapp_key, service_key)
         if not should_run_as_single_pod:
+            logger.debug(f'Deleting Deployment ({service_key}): {name}')
             delete_deployment(name=name, namespace=namespace)
+        logger.debug(f'Deleting Service: {name}')
         delete_service(name=name, namespace=namespace)
+        logger.debug(f'Deleting ConfigMap: {name}')
         delete_configmap(name=name, namespace=namespace)
 
     return
