@@ -91,7 +91,11 @@ def create_userapp(stack, user, token_info):
 
 
 def get_userapp_by_id(stack_id, user, token_info):
-    userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id)
+    sid = stack_id.split("-")[0]
+    userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=sid)
+
+    if userapp is None:
+        return {'error': 'No userapp with for user=%s with id=%s' % (user, sid)}, 404
 
     return userapp, 200
 
@@ -101,6 +105,8 @@ def update_userapp(stack_id, stack, user, token_info):
         return {'error': 'Bad Request: ID mismatch'}, 400
     if stack['creator'] != user:
         return {'error': 'Only the owner may modify a userapp'}, 403
+
+    kube.update_userapp(username=user, userapp_id=stack_id, userapp=stack)
 
     updated = data_store.update_userapp(stack)
     # TODO: check matched_count vs modified_count?

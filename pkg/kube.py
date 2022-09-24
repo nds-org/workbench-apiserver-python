@@ -484,7 +484,7 @@ def create_userapp(username, userapp, spec_map):
                 'resourceLimits'] if 'resourceLimits' in app_spec else {},
             'command': stack_service['command'] if 'command' in stack_service else None,
             'image': stack_service['image'] if 'image' in stack_service else app_spec['image'],
-            'configmap': resource_name,  # not currently used
+            'configmap': resource_name,
             'prestop': stack_service['prestop'] if 'prestop' in stack_service else None,
             'poststart': stack_service['poststart'] if 'poststart' in stack_service else None,
             'ports': service_ports,
@@ -498,9 +498,8 @@ def create_userapp(username, userapp, spec_map):
                        namespace=namespace, labels=svc_labels,
                        service_ports=service_ports)
 
-        if len(configmap_data) > 0:
-            # Create one Kubernetes configmap per-stack service
-            create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
+        # Create one Kubernetes configmap per-stack service
+        create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
 
         if not should_run_as_single_pod:
             #         - name: wait-for-volume-ceph
@@ -562,6 +561,20 @@ def update_userapp_replicas(username, userapp_id, replicas):
         return False
 
     return True
+
+
+def update_userapp(username, userapp_id, userapp):
+    for svc in userapp['services']:
+        service_key = svc['service']
+        resource_name = get_resource_name(username, userapp_id, service_key)
+        namespace = get_resource_namespace(username)
+
+        # Build up config from userapp env/config and appspec config
+        configmap_data = svc['config'] if 'config' in svc else {}
+
+        logger.info("Saving configmap data: " + str(configmap_data))
+
+        update_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
 
 
 def patch_scale_userapp(username, userapp, replicas):
@@ -839,14 +852,14 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
                 # TODO: resource limits
                 # resources=V1ResourceRequirements(),
                 #
-                # TODO: create configmap with env
-                # env_from=[
-                #     client.V1EnvFromSource(
-                #         config_map_ref=client.V1ConfigMapEnvSource(
-                #             name=container['configmap']
-                #         )
-                #     )
-                # ],
+                # create configmap with env vars
+                env_from=[
+                    client.V1EnvFromSource(
+                        config_map_ref=client.V1ConfigMapEnvSource(
+                            name=container['configmap']
+                        )
+                    )
+                ],
                 #
                 # TODO: container.lifecycle?
                 lifecycle=container['lifecycle'] if 'lifecycle' in container else None,
