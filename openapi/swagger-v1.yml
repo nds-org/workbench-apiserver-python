@@ -684,34 +684,6 @@ paths:
           description: Not found
           schema:
             $ref: '#/definitions/Error'
-  '/restart/{stack_id}':
-    parameters:
-      - $ref: '#/parameters/stack_id'
-    get:
-      security:
-        - KeycloakOIDC: [ ]
-        - OAuth2ProxyCookie: [ ]
-      tags:
-        - user app
-      operationId: 'restart_userapp'
-      x-swagger-router-controller: 'api.v1.user_apps'
-      description: |
-        Starts the specified stack
-      responses:
-        '200':
-          description: OK
-          schema:
-            $ref: '#/definitions/Stack'
-        '401':
-          description: Unauthorized - missing or invalid login token
-        '403':
-          description: Forbidden - missing required scope
-          schema:
-            $ref: '#/definitions/Error'
-        '404':
-          description: Not found
-          schema:
-            $ref: '#/definitions/Error'
   '/stop/{stack_id}':
     parameters:
       - $ref: '#/parameters/stack_id'
