@@ -146,26 +146,42 @@ def write_status_and_endpoints(userapp_id, username, service_key, service_status
         for service in services:
             if service['service'] == service_key:
                 ssid = '%s-%s' % (userapp_id, service_key)
-                logger.debug('%s -> %s (owned by %s)' % (ssid, service_status, username))
 
-                service['internalIP'] = pod_ip
-                service['status'] = service_status
-                service['endpoints'] = service_endpoints
+                # Only write if needed (ignore no-ops)
+                should_update = False
 
-        # if all services running, set whole app state to running
-        running_services = [x['service'] for x in services if x['status'] == 'started']
-        if len(running_services) == len(services):
-            userapp['status'] = 'started'
-            logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'running', username))
+                # Ignore status updates in the wrong direction
+                if userapp['status'] == 'stopping' and service_status != 'started' \
+                        or userapp['status'] == 'starting' and service_status != 'stopped':
+                    logger.debug('%s -> %s (owned by %s)' % (ssid, service_status, username))
+                    service['status'] = service_status
+                    should_update = True
 
-        # if all services stopped, set whole app state to stopped
-        stopped_services = [x['service'] for x in services if x['status'] == 'stopped']
-        if len(stopped_services) == len(services):
-            userapp['status'] = 'stopped'
-            logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'stopped', username))
+                if service['endpoints'] != service_endpoints:
+                    service['endpoints'] = service_endpoints
+                    should_update = True
 
-        # Assume success?
-        result = data_store.update_userapp(userapp)
+                if service['internalIP'] != pod_ip:
+                    service['internalIP'] = pod_ip
+                    should_update = True
+
+                # if all services running, set whole app state to running
+                started_services = [x['service'] for x in services if x['status'] == 'started']
+                if userapp['status'] != 'stopping' and userapp['status'] != 'started' and len(started_services) == len(services):
+                    userapp['status'] = 'started'
+                    logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'started', username))
+                    should_update = True
+
+                # if all services stopped, set whole app state to stopped
+                stopped_services = [x['service'] for x in services if x['status'] == 'stopped']
+                if userapp['status'] != 'starting' and userapp['status'] != 'stopped' and len(stopped_services) == len(services):
+                    userapp['status'] = 'stopped'
+                    logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'stopped', username))
+                    should_update = True
+
+                # Assume success?
+                if should_update:
+                    result = data_store.update_userapp(userapp)
     else:
         logger.warning('Unable to update status and endpoints: Userapp not found: %s %s' % (username, userapp_id))
 
@@ -185,9 +201,6 @@ class KubeEventWatcher:
         v1 = client.CoreV1Api()
         appsv1 = client.AppsV1Api()
 
-        # Resource version is used to keep track of stream progress (in case of resume)
-        resource_version = ""
-
         # Ignore kube-system namespace
         # TODO: Parameterize this?
         ignored_namespaces = ['kube-system']
@@ -206,9 +219,8 @@ class KubeEventWatcher:
             time.sleep(1)
             try:
                 # Resource version is used to keep track of stream progress (in case of resume)
-                self.stream = w.stream(func=v1.list_pod_for_all_namespaces, resource_version=resource_version,
+                self.stream = w.stream(func=v1.list_pod_for_all_namespaces,
                                        timeout_seconds=0)
-                resource_version = v1.list_pod_for_all_namespaces().metadata.resource_version
 
                 # Parse events in the stream for Pod phase updates
                 for event in self.stream:
@@ -683,11 +695,11 @@ def patch_scale_deployment(deployment_name, namespace, replicas) -> bool:
         logger.error("Failed to find deployment: " + str(deployment_name))
         return False
 
-    # No-op if we have our desired number of replicas
-    # current_repl = deployment.spec.replicas
-    # if current_repl == replicas:
-    #    logger.debug("No-op for setting replicas number: %d -> %d" % (current_repl, replicas))
-    #    return False
+    # No-op if we already have our desired number of replicas
+    current_repl = deployment.spec.replicas
+    if current_repl == replicas:
+        logger.debug("No-op for setting replicas number: %d -> %d" % (current_repl, replicas))
+        return False
 
     # Query number of replicas
     result = client.AppsV1Api().patch_namespaced_deployment_scale(namespace=namespace, name=deployment_name,

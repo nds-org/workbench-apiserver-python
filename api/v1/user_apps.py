@@ -70,6 +70,7 @@ def create_userapp(stack, user, token_info):
         service_key = svc['service']
         ssid = '%s-%s' % (stack_id, service_key)
         svc['id'] = ssid
+        svc['status'] = 'stopped'
         svc['endpoints'] = []
 
     spec_map = to_spec_map(data_store.fetch_all_appspecs_for_user(user))
@@ -191,9 +192,6 @@ def get_stack_service_logs(stack_service_id, user, token_info):
 
 
 def quickstart_stack(key, user, token_info):
-    # token = jwt.get_token()
-    # username = jwt.get_username_from_token(token)
-
     # TODO: Check if user already has an instance of this app
     # TODO: If it exists, start it up and return
     # TODO: If it does not exist, create, start, then return
@@ -204,53 +202,57 @@ def quickstart_stack(key, user, token_info):
 def start_stack(stack_id, user, token_info):
     # Lookup userapp using the id
     userapp = data_store.retrieve_userapp_by_id(userapp_id=stack_id, username=user)
+    if userapp is None:
+        return {'error': 'No userapp found with id=%s' % stack_id}, 404
 
     # Verify that this user is the owner
     if userapp['creator'] != user:
-        return {'error': 'Only the owner may launch a userapp'}, 403, jwt.get_token_cookie(user)
+        return {'error': 'Only the owner may launch a userapp'}, 403
 
-    status = userapp['status']
-    if status != 'starting' and status != 'running' and status != 'created' and status != 'initializing':
+    all_started = True
+    for svc in userapp['services']:
+        if svc['status'] != 'started':
+            all_started = False
+
+    # If all services started up, set status to started.. otherwise starting
+    if all_started:
+        userapp['status'] = 'started'
+    else:
         userapp['status'] = 'starting'
-
-    #kube.patch_scale_userapp(username=user, userapp=userapp, replicas=1)
-    #data_store.update_userapp(userapp)
-    #return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
+    data_store.update_userapp(userapp)
 
     # Eventually, Pod is Running and event watchers
     #    should update userapp state to STARTED
-    if kube.patch_scale_userapp(username=user, userapp=userapp, replicas=1):
-        data_store.update_userapp(userapp)
-        return {'status': userapp['status']}, 202
-    else:
-        return {'status': 'error',
-                'error': 'failed to set replicas=1 for %s' % stack_id}, 400
+    kube.patch_scale_userapp(username=user, userapp=userapp, replicas=1)
+    return userapp, 202
 
 
 def stop_stack(stack_id, user, token_info):
     # Lookup userapp using the id
     userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id)
+    if userapp is None:
+        return {'error': 'No userapp found with id=%s' % stack_id}, 404
 
     # Verify that this user is the owner
     if userapp['creator'] != user:
-        return {'error': 'Only the owner may shutdown a userapp'}, 403, jwt.get_token_cookie(user)
+        return {'error': 'Only the owner may shutdown a userapp'}, 403
 
-    status = userapp['status']
-    if status != 'stopping' and status != 'stopped':
-        userapp['status'] = 'stopping'
+    all_stopped = True
+    for svc in userapp['services']:
+        if svc['status'] != 'stopped':
+            all_stopped = False
 
-    #kube.patch_scale_userapp(username=user, userapp=userapp, replicas=0)
-    #data_store.update_userapp(userapp)
-    #return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
-
-    # Eventually, Pod is Running and event watchers
-    #    should update userapp state to STOPPED
-    if kube.patch_scale_userapp(username=user, userapp=userapp, replicas=0):
-        data_store.update_userapp(userapp)
-        return {'status': userapp['status']}, 202, jwt.get_token_cookie(user)
+    # If all services shut down, set status to stopped.. otherwise stopping
+    if all_stopped:
+        userapp['status'] = 'stopped'
     else:
-        return {'status': 'error',
-                'error': 'failed to set replicas=0 for %s' % stack_id}, 400, jwt.get_token_cookie(user)
+        userapp['status'] = 'stopping'
+    data_store.update_userapp(userapp)
+
+    # Eventually, Pod terminates and event watchers
+    #    should update userapp state to STOPPED
+    kube.patch_scale_userapp(username=user, userapp=userapp, replicas=0)
+    return userapp, 202
 
 
 # Returns True if update was successful
@@ -267,14 +269,14 @@ def update_userapp_status(stack_id, service_key, new_status, new_endpoints, user
     if service_key not in service_keys:
         logger.error('Service not found in stack: %s %s-%s - %s' %
                      (user, userapp_id, service_key, service_keys))
-        return {'error': 'not found'}, 404, jwt.get_token_cookie(user)
+        return {'error': 'not found'}, 404
 
     service = [x for x in services if x['service'] == service_key][0]
 
     if service['status'] == new_status:
         logger.debug('No-op: Status for %s %s-%s is already %s' %
                      (user, userapp_id, service_key, new_status))
-        return {'status': service['status']}, 304, jwt.get_token_cookie(user)
+        return {'status': service['status']}, 304
 
     service['status'] = new_status
 
@@ -291,28 +293,28 @@ def update_userapp_status(stack_id, service_key, new_status, new_endpoints, user
     result = data_store.update_userapp(userapp)
 
     # naive error handling:
-    #return {'status': new_status}, 200, jwt.get_token_cookie(user)
+    #return {'status': new_status}, 200
 
     if result.modified_count > 0 and result.matched_count == result.modified_count:
         logger.debug('Status updated successfully: %s %s-%s -> %s' %
                      (user, userapp_id, service_key, new_status))
-        return {'status': new_status}, 200, jwt.get_token_cookie(user)
+        return {'status': new_status}, 200
     elif result.matched_count == 0:
         logger.warning('No matches for status update: (%s, %s, %s, %s)' %
                        (userapp_id, user, service_key, new_status))
-        return {'status': 'no matches'}, 404, jwt.get_token_cookie(user)
+        return {'status': 'no matches'}, 404
     elif result.modified_count < result.matched_count:
         logger.warning('Matches found, but were only partially updated (%d/%d): (%s, %s, %s, %s)' %
                        (result.modified_count, result.matched_count, userapp_id, user, service_key, new_status))
-        return {'status': 'partial success (%d/%d)' % (result.modified_count, result.matched_count)}, 207, jwt.get_token_cookie(user)
+        return {'status': 'partial success (%d/%d)' % (result.modified_count, result.matched_count)}, 207
     elif result.modified_count == 0:
         logger.warning('Matches found, but none were updated: (%s, %s, %s, %s)' %
                        (userapp_id, user, service_key, new_status))
-        return {'status': service['status']}, 304, jwt.get_token_cookie(user)
+        return {'status': service['status']}, 304
 
     logger.warning('Something went wrong, and nothing happened: (%s, %s, %s, %s)' %
                    (userapp_id, user, service_key, new_status))
-    return {'error': 'unknown'}, 500, jwt.get_token_cookie(user)
+    return {'error': 'unknown'}, 500
 
 
 def get_key_from_appspec(appspec):
