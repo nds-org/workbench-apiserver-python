@@ -100,13 +100,31 @@ def get_userapp_by_id(stack_id, user, token_info):
     return userapp, 200
 
 
+def restart_userapp(stack_id, user, token_info, wait=True):
+    userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id)
+    if userapp is None:
+        return {'error': 'No userapp found with id=%s' % stack_id}, 404
+
+    stop_stack(stack_id=stack_id, user=user, token_info=token_info)
+    if wait:
+        time.sleep(3)
+    start_stack(stack_id=stack_id, user=user, token_info=token_info)
+    if wait:
+        time.sleep(3)
+
+
 def update_userapp(stack_id, stack, user, token_info):
     if stack['id'] != stack_id:
         return {'error': 'Bad Request: ID mismatch'}, 400
     if stack['creator'] != user:
         return {'error': 'Only the owner may modify a userapp'}, 403
 
+    # Update cluster resources with new config (configmap)
     kube.update_userapp(username=user, userapp_id=stack_id, userapp=stack)
+
+    # If stack is currently running, restart to use new configuration
+    if stack['status'] == 'started' or stack['status'] == 'running':
+        restart_userapp(stack_id=stack_id, user=user, token_info=token_info)
 
     updated = data_store.update_userapp(stack)
     # TODO: check matched_count vs modified_count?
