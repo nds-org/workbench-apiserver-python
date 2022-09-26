@@ -161,7 +161,7 @@ def write_status_and_endpoints(userapp_id, username, service_key, service_status
                     service['endpoints'] = service_endpoints
                     should_update = True
 
-                if service['internalIP'] != pod_ip:
+                if 'internalIP' not in service or service['internalIP'] != pod_ip:
                     service['internalIP'] = pod_ip
                     should_update = True
 
@@ -193,8 +193,9 @@ class KubeEventWatcher:
         self.thread = threading.Thread(target=self.run, name='kube-event-watcher', daemon=True)
 
         self.stream = None
-        logger.info('Starting Kube event watcher')
+        logger.info('Starting KubeWatcher')
         self.thread.start()
+        logger.info('Started KubeWatcher')
 
     def run(self):
         w = watch.Watch()
@@ -204,6 +205,7 @@ class KubeEventWatcher:
         # Ignore kube-system namespace
         # TODO: Parameterize this?
         ignored_namespaces = ['kube-system']
+        logger.info('KubeWatcher watching all namespaces except for: ' + str(ignored_namespaces))
 
         # Include workbench app labels
         # Example:      'labels': {'manager': 'workbench',
@@ -214,9 +216,11 @@ class KubeEventWatcher:
         required_labels = {
             'manager': 'workbench'
         }
+        logger.info('KubeWatcher looking for required labels: ' + str(required_labels))
 
         while True:
             time.sleep(1)
+            logger.info('KubeWatcher is connecting: ' + str(ignored_namespaces))
             try:
                 # Resource version is used to keep track of stream progress (in case of resume)
                 self.stream = w.stream(func=v1.list_pod_for_all_namespaces,
@@ -224,11 +228,12 @@ class KubeEventWatcher:
 
                 # Parse events in the stream for Pod phase updates
                 for event in self.stream:
+                    logger.info('Received pod event: %s' % str(event))
+
                     # Skip Pods in ignored namespaces
                     if event['object'].metadata.namespace in ignored_namespaces:
+                        logger.info('Skipping event in excluded namespace')
                         continue
-
-                    # logger.debug('Received pod event: %s' % str(event['object'].phase))
 
                     # Examine labels, ignore if not workbench app
                     # logger.debug('Event recv\'d: %s' % event)
@@ -270,7 +275,6 @@ class KubeEventWatcher:
                     pod_ip = event['object'].status.pod_ip
                     if pod_ip is None:
                         pod_ip = ''
-                    self.logger.info(' >>>> POD IP: ' + pod_ip)
 
                     # Calculate new status/endpoints and write to db
                     service_endpoints = determine_new_endpoints(userapp_id, username, service_key, conditions)
