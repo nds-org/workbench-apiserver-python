@@ -1,0 +1,10 @@
+.git/
+README.md
+.github/
+.gitignore
+.dockerignore
+idea/
+docker/
+Dockerfile
+cookies
+venv/
