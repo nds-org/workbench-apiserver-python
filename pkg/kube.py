@@ -52,6 +52,7 @@ client.api_client.rest.logger.setLevel(logging.WARNING)
 #            w.stop()
 
 def determine_new_endpoints(userapp_id, username, service_key, conditions):
+    username = get_username(username)
     # logger.debug('Pod Conditions: %s' % conditions)
     service_endpoints = []
     if conditions is not None:
@@ -92,7 +93,7 @@ def determine_new_endpoints(userapp_id, username, service_key, conditions):
                     actual_port = nodePort if nodePort else port if port else ''
 
                     # Use username+appId+serviceKey for ingress host
-                    prefix = get_resource_name(username, userapp_id, service_key)
+                    prefix = get_resource_name(get_username(username), userapp_id, service_key)
 
                     # TODO: Handle multiple ports? e.g. rabbitmq 5672 + 15672?
                     #  if actual_port is '' else get_resource_name(username, userapp_id, str(actual_port))
@@ -140,6 +141,7 @@ def determine_new_status(type, phase):
 
 
 def write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip, service_endpoints):
+    username = get_username(username)
     userapp = data_store.retrieve_userapp_by_id(userapp_id=userapp_id, username=username)
     if userapp is not None:
         services = userapp['services']
@@ -370,13 +372,17 @@ def get_resource_name(*args):
         return "-".join(args)
 
 
+def get_username(username):
+    return username.replace('@', '').replace('.', '')
+
+
 def get_resource_namespace(username):
     if is_single_namespace():
         return KUBE_WORKBENCH_NAMESPACE
     else:
         # TODO: Prefix with KUBE_WORKBENCH_RESOURCE_PREFIX?
         # TODO: better to use KUBE_WORKBENCH_NAMESPACE?
-        return username
+        return get_username(username)
 
 
 # TODO: Replace with explicit boolean
@@ -425,7 +431,7 @@ def initialize():
 # Create necessary resources for a new user
 def init_user(username):
     namespace = get_resource_namespace(username)
-    # resource_name = get_resource_name(username)
+    # resource_name = get_resource_name(get_username(username))
 
     if not is_single_namespace():
         try:
@@ -463,7 +469,7 @@ def create_userapp(username, userapp, spec_map):
 
     labels = {
         'manager': 'workbench',
-        'user': username,
+        'user': get_username(username),
         'workbench-app': userapp_id
     }
 
@@ -478,7 +484,7 @@ def create_userapp(username, userapp, spec_map):
             logger.error("Failed to find app_spec: %s" % service_key)
             raise AppSpecNotFoundError("Failed to find app_spec: %s" % service_key)
         stack_service_id = get_stack_service_id(userapp_id, service_key)
-        resource_name = get_resource_name(username, userapp_id, service_key)
+        resource_name = get_resource_name(get_username(username), userapp_id, service_key)
         service_ports = app_spec['ports'] if 'ports' in app_spec else []
         ingress_hosts[resource_name] = service_ports
 
@@ -534,7 +540,8 @@ def create_userapp(username, userapp, spec_map):
                               replicas=0,
                               init_containers=init_containers,
                               labels=svc_labels,
-                              containers=[container])
+                              containers=[container],
+                              collocate=userapp_id if 'collocate' in app_spec and app_spec['collocate'] else False)
 
     # Create one ingress per-stack
     userapp_annotations = backend_config['userapps']['ingress']['annotations'] \
@@ -546,15 +553,16 @@ def create_userapp(username, userapp, spec_map):
         if 'userapps' in backend_config \
            and 'ingress' in backend_config['userapps'] \
            and 'class' in backend_config['userapps']['ingress'] else None
-    create_ingress(ingress_name=get_resource_name(username, userapp_id, userapp_key),
+    create_ingress(ingress_name=get_resource_name(get_username(username), userapp_id, userapp_key),
                    namespace=namespace, labels=labels,
                    ingress_hosts=ingress_hosts,
                    annotations=userapp_annotations,
                    ingress_class_name=ingress_class_name)
 
     if should_run_as_single_pod:
+        # No need to collocate, since all will run in single pod
         # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
-        create_deployment(deployment_name=get_resource_name(username, userapp_id, userapp_key),
+        create_deployment(deployment_name=get_resource_name(get_username(username), userapp_id, userapp_key),
                           namespace=namespace,
                           replicas=0,
                           labels=labels,
@@ -569,7 +577,7 @@ def update_userapp_replicas(username, userapp_id, replicas):
         return False
     spec_key = userapp['key']
 
-    name = get_resource_name(username, userapp_id, spec_key)
+    name = get_resource_name(get_username(username), userapp_id, spec_key)
     namespace = get_resource_namespace(username)
     result = patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
 
@@ -582,7 +590,7 @@ def update_userapp_replicas(username, userapp_id, replicas):
 def update_userapp(username, userapp_id, userapp):
     for svc in userapp['services']:
         service_key = svc['service']
-        resource_name = get_resource_name(username, userapp_id, service_key)
+        resource_name = get_resource_name(get_username(username), userapp_id, service_key)
         namespace = get_resource_namespace(username)
 
         # Build up config from userapp env/config and appspec config
@@ -603,7 +611,7 @@ def patch_scale_userapp(username, userapp, replicas):
 
     should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else config.KUBE_WORKBENCH_SINGLEPOD
     if should_run_as_single_pod:
-        deployment_name = get_resource_name(username, userapp_id, userapp['key'])
+        deployment_name = get_resource_name(get_username(username), userapp_id, userapp['key'])
         patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas)
         return True
     else:
@@ -611,7 +619,7 @@ def patch_scale_userapp(username, userapp, replicas):
         # TODO: how to check results
         for stack_service in userapp['services']:
             service_key = stack_service['service']
-            deployment_name = get_resource_name(username, userapp_id, service_key)
+            deployment_name = get_resource_name(get_username(username), userapp_id, service_key)
             results.append(
                 patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas))
         return False not in results
@@ -621,7 +629,7 @@ def patch_scale_userapp(username, userapp, replicas):
 def destroy_userapp(username, userapp):
     userapp_id = userapp['id']
     userapp_key = userapp['key']
-    name = get_resource_name(username, userapp_id, userapp_key)
+    name = get_resource_name(get_username(username), userapp_id, userapp_key)
     namespace = get_resource_namespace(username)
 
     logger.debug(f'Deleting Ingress: {name}')
@@ -635,7 +643,7 @@ def destroy_userapp(username, userapp):
 
     for stack_service in userapp['services']:
         service_key = stack_service['service']
-        name = get_resource_name(username, userapp_id, service_key)
+        name = get_resource_name(get_username(username), userapp_id, service_key)
         if not should_run_as_single_pod:
             logger.debug(f'Deleting Deployment ({service_key}): {name}')
             delete_deployment(name=name, namespace=namespace)
@@ -849,7 +857,7 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
     deployment_labels = labels
     deployment_namespace = kwargs['namespace'] if 'namespace' in kwargs else 'default'
     deployment_annotations = kwargs['annotations'] if 'annotations' in kwargs else {}
-
+    deployment_collocate_label = kwargs['collocate'] if 'collocate' in kwargs else False
     deployment_replicas = kwargs['replicas'] if 'replicas' in kwargs else 0
 
     init_containers = kwargs['init_containers'] if 'init_containers' in kwargs else []
@@ -890,6 +898,26 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
                 ]
             ) for container in containers
         ])
+
+    if deployment_collocate_label:
+        podspec.affinity = client.V1Affinity(
+            pod_affinity=client.V1PodAffinity(
+                required_during_scheduling_ignored_during_execution=[
+                    client.V1PodAffinityTerm(
+                        topology_key="kubernetes.io/hostname",
+                        label_selector=client.V1LabelSelector(
+                            match_expressions=[
+                                client.V1LabelSelectorRequirement(
+                                    key="workbench-app",
+                                    operator="In",
+                                    values=[deployment_collocate_label]
+                                )
+                            ]
+                        )
+                    )
+                ]
+            )
+        )
 
     try:
         body = client.V1Deployment(
@@ -1078,7 +1106,7 @@ def get_pod_name(user, ssid):
     namespace = get_resource_namespace(username=user)
     id_segments = ssid.split('-')
 
-    if is_single_pod:
+    if is_single_pod():
         userapp_id = id_segments[0]
         service_key = id_segments[1]
     else:

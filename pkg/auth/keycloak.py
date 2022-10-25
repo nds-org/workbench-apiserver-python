@@ -60,7 +60,7 @@ def userinfo(access_token) -> dict:
             'groups': groups,
             # 'family_name': user['family_name'],
             # 'given_name': user['given_name'],
-            'sub': user['preferred_username']
+            'sub': user['preferred_username'].replace('@', '').replace('.', '')
         }
     except Exception as e:
         logger.warning("Keycloak token verification failed: " + str(e))

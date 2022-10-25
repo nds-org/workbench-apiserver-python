@@ -40,7 +40,7 @@ def userinfo(access_token) -> dict:
             'groups': roles,
             # 'family_name': user['family_name'],
             # 'given_name': user['given_name'],
-            'sub': user['preferredUsername']
+            'sub': user['preferredUsername'].replace('@', '').replace('.', '')
         }
     except Exception as e:
         logger.warning("OAuth2 token verification failed: " + str(e))

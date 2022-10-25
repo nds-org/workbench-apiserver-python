@@ -6,17 +6,16 @@ info:
     email: ndslabs-support@nationaldataservice.org
     name:  NDS Labs Support
     url: http://www.nationaldataservice.org/projects/labs.html
-  version: 1.3.1
+  version: 2.0.0
 schemes:
   - https
-host: kubernetes.docker.internal
 basePath: /api/v1
 securityDefinitions:
   KeycloakOIDC:
     type: oauth2
     flow: implicit
-    authorizationUrl: https://kubernetes.docker.internal/auth/realms/workbench-dev/protocol/openid-connect/auth
-    x-tokenInfoUrl: https://kubernetes.docker.internal/auth/realms/workbench-dev/protocol/openid-connect/userinfo
+    authorizationUrl: /auth/realms/workbench-dev/protocol/openid-connect/auth
+    x-tokenInfoUrl: /auth/realms/workbench-dev/protocol/openid-connect/userinfo
     x-tokenInfoFunc: pkg.auth.keycloak.userinfo
   KeycloakApiKey:
     x-apikeyInfoFunc: 'pkg.auth.jwt.validate_apikey_header'
@@ -29,8 +28,8 @@ securityDefinitions:
     name: Cookie
     in: header
   OAuth2Proxy:
-    authorizationUrl: https://kubernetes.docker.internal/oauth2/start
-    x-tokenInfoUrl: https://kubernetes.docker.internal/oauth2/userinfo
+    authorizationUrl: /oauth2/start
+    x-tokenInfoUrl: /oauth2/userinfo
     x-tokenInfoFunc: pkg.auth.oauth2.userinfo
     type: oauth2
     flow: implicit

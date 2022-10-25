@@ -38,7 +38,8 @@ def generate_unique_id(username):
 
 
 def list_userapps(user, token_info):
-    userapps = data_store.fetch_userapps(user)
+    username = kube.get_username(user)
+    userapps = data_store.fetch_userapps(username=username)
 
     return userapps, 200
 
@@ -56,7 +57,8 @@ def to_spec_map(specs, existing_map=None):
 
 
 def create_userapp(stack, user, token_info):
-    stack['creator'] = user
+    username = kube.get_username(user)
+    stack['creator'] = username
     stack_id = generate_unique_id(user)
     stack['id'] = stack['_id'] = stack_id
 
@@ -77,7 +79,7 @@ def create_userapp(stack, user, token_info):
 
     try:
         # Create service(s) / ingress / deployment
-        kube.create_userapp(username=user, userapp=stack, spec_map=spec_map)
+        kube.create_userapp(username=username, userapp=stack, spec_map=spec_map)
 
         # Save metadata to database
         stack = data_store.create_userapp(stack)
@@ -86,14 +88,15 @@ def create_userapp(stack, user, token_info):
         return stack, 201
     except Exception as e:
         # Cleanup failed userapp resources
-        kube.destroy_userapp(username=user, userapp=stack)
+        kube.destroy_userapp(username=username, userapp=stack)
         logger.error('Failed to create userapp: %s' % str(e))
         return {'error': 'Failed to create userapp: %s' % str(e)}, 400
 
 
 def get_userapp_by_id(stack_id, user, token_info):
     sid = stack_id.split("-")[0]
-    userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=sid)
+    username = kube.get_username(user)
+    userapp = data_store.retrieve_userapp_by_id(username=username, userapp_id=sid)
 
     if userapp is None:
         return {'error': 'No userapp with for user=%s with id=%s' % (user, sid)}, 404
@@ -102,49 +105,52 @@ def get_userapp_by_id(stack_id, user, token_info):
 
 
 def restart_userapp(stack_id, user, token_info, wait=True):
-    userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id)
+    username = kube.get_username(user)
+    userapp = data_store.retrieve_userapp_by_id(username=username, userapp_id=stack_id)
     if userapp is None:
         return {'error': 'No userapp found with id=%s' % stack_id}, 404
 
-    stop_stack(stack_id=stack_id, user=user, token_info=token_info)
+    stop_stack(stack_id=stack_id, user=username, token_info=token_info)
     if wait:
         time.sleep(3)
-    start_stack(stack_id=stack_id, user=user, token_info=token_info)
+    start_stack(stack_id=stack_id, user=username, token_info=token_info)
     if wait:
         time.sleep(3)
 
 
 def update_userapp(stack_id, stack, user, token_info):
+    username = kube.get_username(user)
     if stack['id'] != stack_id:
         return {'error': 'Bad Request: ID mismatch'}, 400
-    if stack['creator'] != user:
+    if stack['creator'] != username:
         return {'error': 'Only the owner may modify a userapp'}, 403
 
     # Update cluster resources with new config (configmap)
-    kube.update_userapp(username=user, userapp_id=stack_id, userapp=stack)
+    kube.update_userapp(username=username, userapp_id=stack_id, userapp=stack)
 
     # If stack is currently running, restart to use new configuration
     if stack['status'] == 'started' or stack['status'] == 'running':
-        restart_userapp(stack_id=stack_id, user=user, token_info=token_info)
+        restart_userapp(stack_id=stack_id, user=username, token_info=token_info)
 
     updated = data_store.update_userapp(stack)
     # TODO: check matched_count vs modified_count?
-    return data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id), 200
+    return data_store.retrieve_userapp_by_id(username=username, userapp_id=stack_id), 200
 
 
 def delete_userapp(stack_id, user, token_info):
+    username = kube.get_username(user)
     # Verify that this user is the owner
-    userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id)
+    userapp = data_store.retrieve_userapp_by_id(username=username, userapp_id=stack_id)
     if userapp is None:
         return {'error': 'No userapp found with id=%s' % stack_id}, 404
-    if userapp['creator'] != user:
+    if userapp['creator'] != username:
         return {'error': 'Only the owner may delete a userapp'}, 403
 
     try:
-        kube.destroy_userapp(username=user, userapp=userapp)
+        kube.destroy_userapp(username=username, userapp=userapp)
         logger.info('Cleaned up the user app: %s' % stack_id)
 
-        deleted = data_store.delete_userapp(username=user, userapp_id=stack_id)
+        deleted = data_store.delete_userapp(username=username, userapp_id=stack_id)
 
         # Verify deletion was successful using deleted_count
         if deleted.deleted_count > 0:
@@ -157,15 +163,16 @@ def delete_userapp(stack_id, user, token_info):
 
 
 def rename_userapp(stack_id, name, user, token_info):
-    userapp = data_store.retrieve_userapp_by_id(stack_id)
+    username = kube.get_username(user)
+    userapp = data_store.retrieve_userapp_by_id(stack_id, username=username)
 
     # Verify that this user is the owner
-    if userapp['creator'] != user:
+    if userapp['creator'] != username:
         return {'error': 'Only the owner may rename a userapp'}, 403
 
     # Change the name
     userapp['name'] = name
-    return update_userapp(stack_id=stack_id, stack=userapp, user=user, token_info=token_info)
+    return update_userapp(stack_id=stack_id, stack=userapp, user=username, token_info=token_info)
 
 
 def get_stack_service_logs(stack_service_id, user, token_info):
@@ -200,13 +207,14 @@ def quickstart_stack(key, user, token_info):
 
 
 def start_stack(stack_id, user, token_info):
+    username = kube.get_username(user)
     # Lookup userapp using the id
-    userapp = data_store.retrieve_userapp_by_id(userapp_id=stack_id, username=user)
+    userapp = data_store.retrieve_userapp_by_id(userapp_id=stack_id, username=username)
     if userapp is None:
         return {'error': 'No userapp found with id=%s' % stack_id}, 404
 
     # Verify that this user is the owner
-    if userapp['creator'] != user:
+    if userapp['creator'] != username:
         return {'error': 'Only the owner may launch a userapp'}, 403
 
     all_started = True
@@ -223,18 +231,19 @@ def start_stack(stack_id, user, token_info):
 
     # Eventually, Pod is Running and event watchers
     #    should update userapp state to STARTED
-    kube.patch_scale_userapp(username=user, userapp=userapp, replicas=1)
+    kube.patch_scale_userapp(username=username, userapp=userapp, replicas=1)
     return userapp, 202
 
 
 def stop_stack(stack_id, user, token_info):
+    username = kube.get_username(user)
     # Lookup userapp using the id
-    userapp = data_store.retrieve_userapp_by_id(username=user, userapp_id=stack_id)
+    userapp = data_store.retrieve_userapp_by_id(username=username, userapp_id=stack_id)
     if userapp is None:
         return {'error': 'No userapp found with id=%s' % stack_id}, 404
 
     # Verify that this user is the owner
-    if userapp['creator'] != user:
+    if userapp['creator'] != username:
         return {'error': 'Only the owner may shutdown a userapp'}, 403
 
     all_stopped = True
@@ -251,17 +260,18 @@ def stop_stack(stack_id, user, token_info):
 
     # Eventually, Pod terminates and event watchers
     #    should update userapp state to STOPPED
-    kube.patch_scale_userapp(username=user, userapp=userapp, replicas=0)
+    kube.patch_scale_userapp(username=username, userapp=userapp, replicas=0)
     return userapp, 202
 
 
 # Returns True if update was successful
 # CURRENTLY UNUSED
 def update_userapp_status(stack_id, service_key, new_status, new_endpoints, user, token_info):
+    username = kube.get_username(user)
     logger.info('Got new endpoints: %s' % str(new_endpoints))
 
     userapp_id = stack_id
-    userapp = data_store.retrieve_userapp_by_id(userapp_id=userapp_id, username=user)
+    userapp = data_store.retrieve_userapp_by_id(userapp_id=userapp_id, username=username)
     services = userapp['services']
     # short-circuit
     service_keys = [x['service'] for x in services]

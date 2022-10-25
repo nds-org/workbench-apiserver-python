@@ -19,6 +19,25 @@
     "uri": "mongodb://workbench:workbench@workbench-mongodb.workbench.svc.cluster.local:27017/ndslabs?authSource=admin",
     "db": "ndslabs"
   },
+  "userapps": {
+    "ingress": {
+      "annotations": {
+        "ingress.kubernetes.io/force-ssl-redirect": "true",
+        "ingress.kubernetes.io/ssl-redirect": "true",
+        "nginx.ingress.kubernetes.io/auth-response-headers": "x-auth-request-user, x-auth-request-email, x-auth-request-access-token, x-auth-request-redirect, x-auth-request-preferred-username",
+        "nginx.ingress.kubernetes.io/auth-url": "https://kubernetes.docker.internal/oauth2/auth",
+        "nginx.ingress.kubernetes.io/signin-url": "https://kubernetes.docker.internal/oauth2/start?rd=https%3A%2F%2Fkubernetes.docker.internal%2F"
+      },
+      "tls": {
+        "hosts": [
+          "kubernetes.docker.internal",
+          "*.kubernetes.docker.internal"
+        ]
+      },
+      "class": "nginx",
+      "enabled": true
+    }
+  },
 
 
 
@@ -39,25 +58,6 @@
       "read_only": true,
       "storage_class": "nfs",
       "volume_path": "/tmp/shared"
-    }
-  },
-  "userapps": {
-    "ingress": {
-      "annotations": {
-        "ingress.kubernetes.io/force-ssl-redirect": "true",
-        "ingress.kubernetes.io/ssl-redirect": "true",
-        "nginx.ingress.kubernetes.io/auth-response-headers": "x-auth-request-user, x-auth-request-email, x-auth-request-access-token, x-auth-request-redirect, x-auth-request-preferred-username",
-        "nginx.ingress.kubernetes.io/auth-url": "https://kubernetes.docker.internal/oauth2/auth",
-        "nginx.ingress.kubernetes.io/signin-url": "https://kubernetes.docker.internal/oauth2/start?rd=https%3A%2F%2Fkubernetes.docker.internal%2F"
-      },
-      "tls": {
-        "hosts": [
-          "kubernetes.docker.internal",
-          "*.kubernetes.docker.internal"
-        ]
-      },
-      "class": "nginx",
-      "enabled": true
     }
   }
 }
