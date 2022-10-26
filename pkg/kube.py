@@ -516,9 +516,10 @@ def create_userapp(username, userapp, spec_map):
 
         # Create one Kubernetes service per-stack service
         logger.info("Creating service with resource name: " + str(resource_name))
-        create_service(service_name=resource_name,
-                       namespace=namespace, labels=svc_labels,
-                       service_ports=service_ports)
+        if len(service_ports) > 0:
+            create_service(service_name=resource_name,
+                           namespace=namespace, labels=svc_labels,
+                           service_ports=service_ports)
 
         # Create one Kubernetes configmap per-stack service
         create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
@@ -544,21 +545,26 @@ def create_userapp(username, userapp, spec_map):
                               containers=[container],
                               collocate=userapp_id if 'collocate' in app_spec and app_spec['collocate'] else False)
 
-    # Create one ingress per-stack
-    userapp_annotations = backend_config['userapps']['ingress']['annotations'] \
-        if 'userapps' in backend_config \
-           and 'ingress' in backend_config['userapps'] \
-           and 'annotations' in backend_config['userapps']['ingress'] else {}
+    non_empty_rules = []
+    for service_name in ingress_hosts.keys():
+        for port in ingress_hosts[service_name]:
+            non_empty_rules += port
 
-    ingress_class_name = backend_config['userapps']['ingress']['class'] \
-        if 'userapps' in backend_config \
-           and 'ingress' in backend_config['userapps'] \
-           and 'class' in backend_config['userapps']['ingress'] else None
-    create_ingress(ingress_name=get_resource_name(get_username(username), userapp_id, userapp_key),
-                   namespace=namespace, labels=labels,
-                   ingress_hosts=ingress_hosts,
-                   annotations=userapp_annotations,
-                   ingress_class_name=ingress_class_name)
+    # Create one ingress per-stack
+    if len(ingress_hosts.keys()) > 0 and len(non_empty_rules) > 0:
+        userapp_annotations = backend_config['userapps']['ingress']['annotations'] \
+            if 'userapps' in backend_config \
+               and 'ingress' in backend_config['userapps'] \
+               and 'annotations' in backend_config['userapps']['ingress'] else {}
+        ingress_class_name = backend_config['userapps']['ingress']['class'] \
+            if 'userapps' in backend_config \
+               and 'ingress' in backend_config['userapps'] \
+               and 'class' in backend_config['userapps']['ingress'] else None
+        create_ingress(ingress_name=get_resource_name(get_username(username), userapp_id, userapp_key),
+                       namespace=namespace, labels=labels,
+                       ingress_hosts=ingress_hosts,
+                       annotations=userapp_annotations,
+                       ingress_class_name=ingress_class_name)
 
     if should_run_as_single_pod:
         # No need to collocate, since all will run in single pod
