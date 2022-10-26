@@ -538,6 +538,7 @@ def create_userapp(username, userapp, spec_map):
             create_deployment(deployment_name=resource_name,
                               namespace=namespace,
                               replicas=0,
+                              username=get_username(username),
                               init_containers=init_containers,
                               labels=svc_labels,
                               containers=[container],
@@ -565,6 +566,7 @@ def create_userapp(username, userapp, spec_map):
         create_deployment(deployment_name=get_resource_name(get_username(username), userapp_id, userapp_key),
                           namespace=namespace,
                           replicas=0,
+                          username=get_username(username),
                           labels=labels,
                           # TODO: how to wait for deps in singlepod mode?
                           # init_containers=init_containers,
@@ -848,9 +850,22 @@ def get_image_string(container_image):
     return '%s/%s:%s' % (repo, name, tag) if repo is not None else '%s:%s' % (name, tag)
 
 
+def get_home_pvc_name(user):
+    pvc_suffix = backend_config['userapps']['home_storage'][
+        'claim_suffix'] if 'userapps' in backend_config and 'home_storage' in backend_config[
+        'userapps'] and 'claim_suffix' in backend_config['userapps']['home_storage'] else 'home-data'
+    return get_resource_name(get_username(user), pvc_suffix)
+
+
+def get_home_storage_class():
+    return backend_config['userapps']['home_storage'][
+        'storage_class'] if 'userapps' in backend_config and 'home_storage' in backend_config[
+        'userapps'] and 'storage_class' in backend_config['userapps']['home_storage'] else None
+
+
 # Containers:
 #   "busybox" -> { name, configmap, image, lifecycle, ports, command }
-def create_deployment(deployment_name, containers, labels, **kwargs):
+def create_deployment(deployment_name, containers, labels, username, **kwargs):
     appv1 = client.AppsV1Api()
 
     # TODO: Validation
@@ -866,13 +881,48 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
 
     service_account_name = kwargs['service_account'] if 'service_account' in kwargs else None
 
+    # Mount in user home / shared storage, if necessary
+    volumes = []
+    volume_mounts = []
+    enable_home_storage = backend_config['userapps']['home_storage'][
+        'enabled'] if 'userapps' in backend_config and 'home_storage' in backend_config[
+        'userapps'] and 'enabled' in backend_config['userapps']['home_storage'] else False
+    if enable_home_storage:
+        home_pvc_name = get_home_pvc_name(username)
+        volume_mounts += client.V1VolumeMount(name="home", mount_path='/home/' + username, read_only=False),
+        volumes += client.V1Volume(name="home", persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
+            claim_name=home_pvc_name,
+            read_only=False
+        )),
+
+    enable_shared_storage = backend_config['userapps']['shared_storage'][
+        'enabled'] if 'userapps' in backend_config and 'shared_storage' in backend_config[
+        'userapps'] and 'enabled' in backend_config['userapps']['shared_storage'] else False
+    if enable_shared_storage:
+        shared_storage_claim_name = backend_config['userapps']['shared_storage'][
+            'claim_name'] if 'userapps' in backend_config and 'shared_storage' in backend_config[
+            'userapps'] and 'claim_name' in backend_config['userapps']['shared_storage'] else 'workbench-shared-storage'
+        shared_storage_mount_path = backend_config['userapps']['shared_storage'][
+            'mount_path'] if 'userapps' in backend_config and 'shared_storage' in backend_config[
+            'userapps'] and 'mount_path' in backend_config['userapps']['shared_storage'] else '/shared'
+        shared_storage_read_only = backend_config['userapps']['shared_storage'][
+            'read_only'] if 'userapps' in backend_config and 'shared_storage' in backend_config[
+            'userapps'] and 'read_only' in backend_config['userapps']['shared_storage'] else False
+        volume_mounts += client.V1VolumeMount(name="shared", mount_path=shared_storage_mount_path, read_only=shared_storage_read_only),
+        volumes += client.V1Volume(name="shared", persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
+            claim_name=shared_storage_claim_name,
+            read_only=shared_storage_read_only
+        )),
+
     # Build a podspec from given containers and other parameters
     podspec = client.V1PodSpec(
         service_account_name=service_account_name,
+        volumes=volumes,
         containers=[
             client.V1Container(
                 name=container['name'],
                 command=container['command'],
+                volume_mounts=volume_mounts,
                 # TODO: resource limits
                 # resources=V1ResourceRequirements(),
                 #
@@ -899,6 +949,7 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
             ) for container in containers
         ])
 
+    # Schedule pods on same node, if requested
     if deployment_collocate_label:
         podspec.affinity = client.V1Affinity(
             pod_affinity=client.V1PodAffinity(
@@ -939,7 +990,7 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
                         annotations=podspec_annotations,
                         labels=deployment_labels
                     ),
-                    spec=podspec
+                    spec=podspec,
                 )
             )
         )
@@ -1106,13 +1157,8 @@ def get_pod_name(user, ssid):
     namespace = get_resource_namespace(username=user)
     id_segments = ssid.split('-')
 
-    if is_single_pod():
-        userapp_id = id_segments[0]
-        service_key = id_segments[1]
-    else:
-        userapp_id = id_segments[0]
-        # stack_key = id_segments[1]  # not needed here
-        service_key = id_segments[2]
+    userapp_id = id_segments[0]
+    service_key = id_segments[1]
 
     print(f"Looking up pod for user={user} for ssid={ssid} within userapp={userapp_id}")
 

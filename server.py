@@ -38,7 +38,7 @@ if __name__ == '__main__':
     # example: /api/console?namespace=lambert8&ssid=svwk8l-toolmanager
     @sock.route('/api/console')
     def console_exec(ws):
-        namespace = request.args.get('namespace')
+        namespace = kube.get_username(request.args.get('namespace'))
         ssid = request.args.get('ssid')
 
         logger.debug(f'Connecting to console: {namespace}/{ssid}')

@@ -3,6 +3,7 @@ from builtins import range
 
 from pkg import kube
 from pkg.auth import jwt
+from pkg.config import backend_config
 from pkg.db.datastore import data_store
 
 import time
@@ -56,6 +57,19 @@ def to_spec_map(specs, existing_map=None):
     return spec_map
 
 
+def ensure_create_home_pvc(user):
+    username = kube.get_username(user)
+
+    # Ensure user home PVC exists
+    pvc_name = kube.get_home_pvc_name(user)
+    storage_class = kube.get_home_storage_class()
+    try:
+        kube.create_persistent_volume_claim(pvc_name=pvc_name, namespace=kube.get_resource_namespace(username=username), storage_class=storage_class)
+    except Exception as e:
+        logger.warning(f'Failed to create home PVC for user={username}: ', str(e))
+        pass
+
+
 def create_userapp(stack, user, token_info):
     username = kube.get_username(user)
     stack['creator'] = username
@@ -63,9 +77,9 @@ def create_userapp(stack, user, token_info):
     stack['id'] = stack['_id'] = stack_id
 
     if stack_id is None:
-        return {'error': 'Failed to generate unique ID' }, 500
+        return {'error': 'Failed to generate unique ID'}, 500
     if user is None:
-        return {'error': 'Failed to create userapp: no user specified' }, 400
+        return {'error': 'Failed to create userapp: no user specified'}, 400
 
     # Set stack service ID on each dependency
     for svc in stack['services']:
@@ -78,6 +92,9 @@ def create_userapp(stack, user, token_info):
     spec_map = to_spec_map(data_store.fetch_all_appspecs_for_user(user))
 
     try:
+        # Ensure that user's home PVC has been created
+        ensure_create_home_pvc(user=user)
+
         # Create service(s) / ingress / deployment
         kube.create_userapp(username=username, userapp=stack, spec_map=spec_map)
 

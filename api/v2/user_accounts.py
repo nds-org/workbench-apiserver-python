@@ -17,6 +17,7 @@ import pkg.kube
 
 from pkg import config, kube
 from pkg.auth import keycloak
+from pkg.config import backend_config
 
 #from helper import etcdClient
 #from pkg import validate
@@ -104,7 +105,8 @@ def ensure_userdata_configmap_exists(username, labels):
 
 def ensure_home_data_pvc_exists(username, labels):
     pvc_namespace = pkg.kube.get_resource_namespace(username)
-    pvc_name = pkg.kube.get_resource_name(username, "home-data")
+    pvc_suffix = backend_config['userapps']['home'] if 'userapps' in backend_config and 'home' in backend_config['userapps'] else 'home-data'
+    pvc_name = pkg.kube.get_resource_name(username, pvc_suffix)
 
     logger.debug("Creating PVC: " + pvc_name)
 
@@ -201,127 +203,3 @@ def get_account_by_id(user, token_info, account_id):
 
 
 
-
-##########
-# LEGACY #
-##########
-
-
-def list_accounts():
-    mongo_client = get_mongo_client()
-    with mongo_client:
-        db = mongo_client['workbench']
-        cursor = db[USER_ACCOUNTS_COLLECTION_NAME].find()
-        docs = list(cursor)
-        return parse_json(docs), 200
-    return { 'error': 'Failed to connect to MongoDB' }, 500
-
-
-def create_account(account):
-    mongo_client = get_mongo_client()
-    with mongo_client:
-        db = mongo_client['workbench']
-        record = db[USER_ACCOUNTS_COLLECTION_NAME].insert_one(account)
-        account['_id'] = str(record.inserted_id)
-        return parse_json(account), 201
-    return { 'error': 'Failed to connect to MongoDB' }, 500
-
-
-def update_account(account_id, account):
-    mongo_client = get_mongo_client()
-    with mongo_client:
-        db = mongo_client['workbench']
-        db[USER_ACCOUNTS_COLLECTION_NAME].replace_one({ '_id': ObjectId(account_id) }, account)
-        return parse_json(account), 200
-    return { 'error': 'Failed to connect to MongoDB' }, 500
-
-
-def delete_account(account_id):
-    mongo_client = get_mongo_client()
-    with mongo_client:
-        db = mongo_client['workbench']
-        db[USER_ACCOUNTS_COLLECTION_NAME].remove({ '_id': ObjectId(account_id) })
-        return 204
-    return { 'error': 'Failed to connect to MongoDB' }, 500
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-ACCOUNTS_BASE_PATH = config.ETCD_BASE_PATH + '/accounts'
-ACCOUNT_SUFFIX = '/account'
-
-
-@staticmethod
-def USER_BASE_PATH(username):
-    return ACCOUNTS_BASE_PATH + username
-
-
-@staticmethod
-def USER_ACCOUNT_PATH(username):
-    return USER_BASE_PATH(username) + ACCOUNT_SUFFIX
-
-
-def post_authenticate_legacy():
-    req_json = connexion.request.json
-    username = req_json['username']
-    password = req_json['password']
-    print(username, password)
-
-    if etcdClient.checkPassword(username, password):
-        token = {"token": generate_token(username)}
-        return token, 200
-    else:
-        return '', 401
-
-
-
-def generate_token(user_id):
-    iat = datetime.datetime.utcnow()
-    timeout = datetime.timedelta(minutes=config.JWT_EXP_DELTA_MINS)
-    exp = iat + timeout
-    server = os.uname()[1]
-
-    payload = {
-        "exp": exp,
-        "id": user_id,
-        "iat": iat,
-        "server": server,
-        "user": user_id
-    }
-    return jwt.encode(payload, config.JWT_SECRET, algorithm=config.JWT_ALGORITHM)
-
-
-def decode_token(token):
-    try:
-        return jwt.decode(token, config.JWT_SECRET, algorithms=[config.JWT_ALGORITHM])
-    except JWTError as e:
-        six.raise_from(Unauthorized, e)
-
-
-def get_secret(user, token_info) -> str:
-    return '''
-    You are user_id {user} and the secret is 'wbevuec'.
-    Decoded token claims: {token_info}.
-    '''.format(user=user, token_info=token_info)
-
-
-def verify_token(token):
-    try:
-        jws.verify(token, config.JWT_SECRET, config.JWT_ALGORITHM)
-        return True, 200
-    except JWTError:
-        return JWTError, 401

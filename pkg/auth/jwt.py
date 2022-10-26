@@ -197,15 +197,16 @@ def validate_role(required_role, roles):
 
 
 def validate_scopes(required_scopes, claims):
-    roles = claims['realm_access']['roles']
+    logger.info("Token info: " + str(claims))
+    groups = claims['groups']
     if required_scopes is not None and 'workbench-admin' in required_scopes:
-        validate_role('workbench-admin', roles)
+        validate_role('role:workbench-admin', groups)
     if required_scopes is not None and 'workbench-accounts' in required_scopes:
-        validate_role('workbench-accounts', roles)
+        validate_role('role:workbench-accounts', groups)
     if required_scopes is not None and 'workbench-catalog' in required_scopes:
-        validate_role('workbench-catalog', roles)
+        validate_role('role:workbench-catalog', groups)
     if required_scopes is not None and 'workbench-dev' in required_scopes:
-        validate_role('workbench-dev', roles)
+        validate_role('role:workbench-dev', groups)
 
 
 def tokeninfo(token):

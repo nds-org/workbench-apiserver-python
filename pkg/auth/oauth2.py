@@ -2,7 +2,9 @@ import json
 
 import requests
 import logging
-from pkg.config import SSL_VERIFY, OAUTH_USERINFO_URL
+
+from pkg import kube
+from pkg.config import SSL_VERIFY, OAUTH_USERINFO_URL, backend_config
 import connexion
 
 logger = logging.getLogger('pkg.auth.oauth2')
@@ -33,6 +35,8 @@ def userinfo(access_token) -> dict:
         for grp in user['groups']:
             roles.append(grp)
 
+        sub = user['preferredUsername'].replace('@', '').replace('.', '')
+
         # TODO: Hoping that oauth2-proxy enhances support for providing arbitrary token claims from OIDC
         # See https://github.com/oauth2-proxy/oauth2-proxy/issues/834
         return {
@@ -40,7 +44,7 @@ def userinfo(access_token) -> dict:
             'groups': roles,
             # 'family_name': user['family_name'],
             # 'given_name': user['given_name'],
-            'sub': user['preferredUsername'].replace('@', '').replace('.', '')
+            'sub': sub
         }
     except Exception as e:
         logger.warning("OAuth2 token verification failed: " + str(e))

@@ -4,8 +4,6 @@
   "swagger_url": "openapi/swagger-v1.yml",
   "namespace": "workbench",
   "domain": "kubernetes.docker.internal",
-  "singlepod": false,
-  "storage_class": null,
   "keycloak": {
     "clientId": "workbench-local",
     "clientSecret": "",
@@ -20,6 +18,18 @@
     "db": "ndslabs"
   },
   "userapps": {
+    "singlepod": false,
+    "home_storage": {
+      "enabled": true,
+      "claim_suffix": "home-data",
+      "storage_class": "nfs"
+    },
+    "shared_storage": {
+      "enabled": false,
+      "read_only": true,
+      "mount_path": "/shared",
+      "claim_name": "workbench-shared-storage"
+    },
     "ingress": {
       "annotations": {
         "ingress.kubernetes.io/force-ssl-redirect": "true",
@@ -43,21 +53,5 @@
 
 
   "timeout": 30,
-  "inactivity_timeout": 480,
-  "specs": {
-    "branch": "master",
-    "repo": "https://github.com/nds-org/ndslabs-specs.git"
-  },
-  "storage": {
-    "home": {
-      "claim_suffix": "-home",
-      "storage_class": "nfs"
-    },
-    "shared": {
-      "enabled": false,
-      "read_only": true,
-      "storage_class": "nfs",
-      "volume_path": "/tmp/shared"
-    }
-  }
+  "inactivity_timeout": 480
 }

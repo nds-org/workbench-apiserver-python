@@ -41,8 +41,8 @@ MONGO_DB = os.getenv('MONGO_DB', backend_config['mongo']['db'] if 'db' in backen
 # v2?
 KUBE_WORKBENCH_RESOURCE_PREFIX = os.getenv('KUBE_WORKBENCH_RESOURCE_PREFIX', backend_config['resource_prefix'] if 'resource_prefix' in backend_config else '')
 KUBE_WORKBENCH_NAMESPACE = os.getenv('KUBE_WORKBENCH_NAMESPACE', backend_config['namespace'] if 'namespace' in backend_config else '')
-KUBE_WORKBENCH_SINGLEPOD = os.getenv('KUBE_WORKBENCH_SINGLEPOD', 'false').lower() in ('true', '1', 't')
-KUBE_PVC_STORAGECLASS = os.getenv('KUBE_PVC_STORAGECLASS', backend_config['storage_class'] if 'storage_class' in backend_config else None)
+KUBE_WORKBENCH_SINGLEPOD = os.getenv('KUBE_WORKBENCH_SINGLEPOD', backend_config['userapps']['singlepod'] if 'userapps' in backend_config and 'singlepod' in backend_config['userapps'] else False)
+KUBE_PVC_STORAGECLASS = os.getenv('KUBE_PVC_STORAGECLASS', backend_config['userapps']['home']['storage_class'] if 'userapps' in backend_config and 'home' in backend_config['userapps'] and 'storage_class' in backend_config['userapps']['home'] else None)
 
 SWAGGER_URL = os.getenv('SWAGGER_URL', backend_config['swagger_url'] if 'swagger_url' in backend_config else 'openapi/swagger-v1.yml')
 
