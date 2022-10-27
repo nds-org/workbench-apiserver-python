@@ -545,13 +545,8 @@ def create_userapp(username, userapp, spec_map):
                               containers=[container],
                               collocate=userapp_id if 'collocate' in app_spec and app_spec['collocate'] else False)
 
-    non_empty_rules = []
-    for service_name in ingress_hosts.keys():
-        for port in ingress_hosts[service_name]:
-            non_empty_rules += port
-
     # Create one ingress per-stack
-    if len(ingress_hosts.keys()) > 0 and len(non_empty_rules) > 0:
+    if len(ingress_hosts.keys()) > 0:
         userapp_annotations = backend_config['userapps']['ingress']['annotations'] \
             if 'userapps' in backend_config \
                and 'ingress' in backend_config['userapps'] \
@@ -1093,52 +1088,60 @@ def create_ingress(ingress_name, ingress_hosts, labels, **kwargs):
 
     ingress_domain = config.DOMAIN
 
-    try:
-        ingress_input = client.V1Ingress(
-            api_version='networking.k8s.io/v1',
-            kind='Ingress',
-            metadata=client.V1ObjectMeta(
-                name=ingress_name,
-                namespace=ingress_namespace,
-                annotations=ingress_annotations,
-                labels=ingress_labels,
-            ),
-            spec=client.V1IngressSpec(rules=[
-                client.V1IngressRule(
-                    host='%s.%s' % (service_name, ingress_domain),
-                    http=client.V1HTTPIngressRuleValue(
-                        paths=[client.V1HTTPIngressPath(
-                            path_type='ImplementationSpecific',
-                            path='/',  # Since we use host-based routing
-                            backend=client.V1IngressBackend(
-                                service=client.V1IngressServiceBackend(
-                                    name=port['name'] if 'name' in port else service_name,
-                                    port=client.V1ServiceBackendPort(
-                                        number=port['port']
+    non_empty_rules = {}
+    for service_name in ingress_hosts.keys():
+        for port in ingress_hosts[service_name]:
+            if service_name not in non_empty_rules:
+                non_empty_rules[service_name] = []
+            non_empty_rules[service_name] += port
+
+    if len(non_empty_rules.keys()) > 0:
+        try:
+            ingress_input = client.V1Ingress(
+                api_version='networking.k8s.io/v1',
+                kind='Ingress',
+                metadata=client.V1ObjectMeta(
+                    name=ingress_name,
+                    namespace=ingress_namespace,
+                    annotations=ingress_annotations,
+                    labels=ingress_labels,
+                ),
+                spec=client.V1IngressSpec(rules=[
+                    client.V1IngressRule(
+                        host='%s.%s' % (service_name, ingress_domain),
+                        http=client.V1HTTPIngressRuleValue(
+                            paths=[client.V1HTTPIngressPath(
+                                path_type='ImplementationSpecific',
+                                path='/',  # Since we use host-based routing
+                                backend=client.V1IngressBackend(
+                                    service=client.V1IngressServiceBackend(
+                                        name=port['name'] if 'name' in port else service_name,
+                                        port=client.V1ServiceBackendPort(
+                                            number=port['port']
+                                        )
                                     )
                                 )
-                            )
-                        ) for port in ingress_hosts[service_name]]
-                    )
-                ) for service_name in ingress_hosts.keys()
-            ],
-                tls=[client.V1IngressTLS(hosts=[ingress_domain, '*.' + ingress_domain])],
-                ingress_class_name=ingress_class_name)
-        )
+                            ) for port in ingress_hosts[service_name]]
+                        )
+                    ) for service_name in non_empty_rules.keys()
+                ],
+                    tls=[client.V1IngressTLS(hosts=[ingress_domain, '*.' + ingress_domain])],
+                    ingress_class_name=ingress_class_name)
+            )
 
-        ingress = client.NetworkingV1Api().create_namespaced_ingress_with_http_info(ingress_namespace, ingress_input)
+            ingress = client.NetworkingV1Api().create_namespaced_ingress_with_http_info(ingress_namespace, ingress_input)
 
-        logger.debug("Created ingress resource: " + str(ingress))
-        # for i in ret.items:
-        #    logger.debug("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
-        return ingress
+            logger.debug("Created ingress resource: " + str(ingress))
+            # for i in ret.items:
+            #    logger.debug("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
+            return ingress
 
-    except (ApiException, HTTPError) as exc:
-        if isinstance(exc, ApiException) and exc.status == 409:
-            return None
-        else:
-            logger.error("Error creating ingress resource: %s" % str(exc))
-            raise exc
+        except (ApiException, HTTPError) as exc:
+            if isinstance(exc, ApiException) and exc.status == 409:
+                return None
+            else:
+                logger.error("Error creating ingress resource: %s" % str(exc))
+                raise exc
 
 
 def delete_ingress(name, namespace):
