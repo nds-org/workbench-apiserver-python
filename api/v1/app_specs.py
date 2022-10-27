@@ -92,7 +92,10 @@ def list_services_all(user, token_info):
 
 def get_service_by_id(service_id, user, token_info):
     # No token (or appspec not found), but we can still check system catalog
-    appspec = data_store.retrieve_appspec_by_key(service_id)
+    appspec = data_store.retrieve_system_appspec_by_key(service_id)
+    if appspec is None:
+        appspec = data_store.retrieve_user_appspec_by_key(user, service_id)
+
     if appspec is not None:
         return appspec, 200
     else:
