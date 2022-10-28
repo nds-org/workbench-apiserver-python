@@ -526,19 +526,33 @@ def create_userapp(username, userapp, spec_map):
 
         if not should_run_as_single_pod:
             #         - name: wait-for-volume-ceph
-            #           image: ghcr.io/groundnuty/k8s-wait-for:v1.6
+            #           image:
             #           imagePullPolicy: Always
             #           args:
             #             - "pod"
             #             - "-lapp=develop-volume-ceph-krakow"
-            init_containers = [
+            init_containers = []
+            if 'depends' in app_spec:
+                init_containers = [
+                    client.V1Container(name='wait-for-dep-' + dep['key'],
+                                       image='ghcr.io/groundnuty/k8s-wait-for:v1.6',
+                                       image_pull_policy='Always',
+                                       args=[
+                                           "pod",
+                                           "-lmanager=workbench",
+                                           "-lworkbench-app=" + userapp_id,
+                                           "-luser=" + get_username(username),
+                                           "-lworkbench-svc=" + dep['key']
+                                       ]) for dep in app_spec['depends']
+                ]
 
-            ]
+            service_account = backend_config['userapps']['serviceAccountName'] if 'userapps' in backend_config and 'serviceAccountName' in backend_config['userapps'] else None
 
             # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
             create_deployment(deployment_name=resource_name,
                               namespace=namespace,
                               replicas=0,
+                              service_account=service_account,
                               username=get_username(username),
                               init_containers=init_containers,
                               labels=svc_labels,
@@ -562,11 +576,14 @@ def create_userapp(username, userapp, spec_map):
                        ingress_class_name=ingress_class_name)
 
     if should_run_as_single_pod:
+        service_account = backend_config['userapps']['serviceAccountName'] if 'userapps' in backend_config and 'serviceAccountName' in backend_config['userapps'] else None
+
         # No need to collocate, since all will run in single pod
         # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
         create_deployment(deployment_name=get_resource_name(get_username(username), userapp_id, userapp_key),
                           namespace=namespace,
                           replicas=0,
+                          service_account=service_account,
                           username=get_username(username),
                           labels=labels,
                           # TODO: how to wait for deps in singlepod mode?
@@ -919,6 +936,7 @@ def create_deployment(deployment_name, containers, labels, username, **kwargs):
     podspec = client.V1PodSpec(
         service_account_name=service_account_name,
         volumes=volumes,
+        init_containers=init_containers,
         containers=[
             client.V1Container(
                 name=container['name'],

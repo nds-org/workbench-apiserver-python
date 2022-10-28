@@ -19,6 +19,7 @@
   },
   "userapps": {
     "singlepod": false,
+    "serviceAccountName": "workbench",
     "home_storage": {
       "enabled": true,
       "claim_suffix": "home-data",
