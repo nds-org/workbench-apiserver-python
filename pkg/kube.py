@@ -524,6 +524,7 @@ def create_userapp(username, userapp, spec_map):
         # Create one Kubernetes configmap per-stack service
         create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
 
+        init_containers = []
         if not should_run_as_single_pod:
             #         - name: wait-for-volume-ceph
             #           image:
@@ -531,7 +532,6 @@ def create_userapp(username, userapp, spec_map):
             #           args:
             #             - "pod"
             #             - "-lapp=develop-volume-ceph-krakow"
-            init_containers = []
             if 'depends' in app_spec:
                 init_containers = [
                     client.V1Container(name='wait-for-dep-' + dep['key'],
@@ -543,7 +543,7 @@ def create_userapp(username, userapp, spec_map):
                                            "-lworkbench-app=" + userapp_id,
                                            "-luser=" + get_username(username),
                                            "-lworkbench-svc=" + dep['key']
-                                       ]) for dep in app_spec['depends']
+                                       ]) for dep in app_spec['depends'] if dep['required']
                 ]
 
             service_account = backend_config['userapps']['serviceAccountName'] if 'userapps' in backend_config and 'serviceAccountName' in backend_config['userapps'] else None
@@ -624,10 +624,6 @@ def update_userapp(username, userapp_id, userapp):
 def patch_scale_userapp(username, userapp, replicas):
     userapp_id = userapp['id']
     namespace = get_resource_namespace(username)
-
-    # TODO: startup dependency validation - do they all exist?
-    # TODO: include wait_for in init_containers
-    # TODO: see https://github.com/groundnuty/k8s-wait-for
 
     should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else config.KUBE_WORKBENCH_SINGLEPOD
     if should_run_as_single_pod:
