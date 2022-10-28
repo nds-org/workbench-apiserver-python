@@ -973,6 +973,11 @@ definitions:
         $ref: '#/definitions/ServiceImage'
       resourceLimits:
         $ref: '#/definitions/ResourceLimits'
+      additionalResources:
+        type: array
+        items:
+          type: string
+        default: []
       depends:
         type: array
         items:
