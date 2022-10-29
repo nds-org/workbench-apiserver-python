@@ -550,7 +550,7 @@ def create_userapp(username, userapp, spec_map):
                                        ]) for dep in app_spec['depends'] if dep['required']
                 ]
 
-            service_account = backend_config['userapps']['serviceAccountName'] if 'userapps' in backend_config and 'serviceAccountName' in backend_config['userapps'] else None
+            service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
 
             # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
             create_deployment(deployment_name=resource_name,
@@ -580,7 +580,7 @@ def create_userapp(username, userapp, spec_map):
                        ingress_class_name=ingress_class_name)
 
     if should_run_as_single_pod:
-        service_account = backend_config['userapps']['serviceAccountName'] if 'userapps' in backend_config and 'serviceAccountName' in backend_config['userapps'] else None
+        service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
 
         # No need to collocate, since all will run in single pod
         # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
