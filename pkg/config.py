@@ -110,7 +110,7 @@ try:
     logger.info("Using Keycloak Realm token service: %s" % KC_PUBLICKEY)
 except requests.exceptions.RequestException as e:
     logger.error("Failed to fetch keycloak realm config: %s" % e)
-    raise SystemExit(e)
+    logger.warning("Assuming running OAuth2 Proxy...")
 
 
 
