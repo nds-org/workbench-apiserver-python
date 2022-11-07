@@ -489,7 +489,7 @@ def create_userapp(username, userapp, spec_map):
         ingress_hosts[resource_name] = service_ports
 
         # Build up config from userapp env/config and appspec config
-        configmap_data = userapp['config'] if 'config' in userapp else {}
+        configmap_data = stack_service['config'] if 'config' in stack_service else {}
         spec_config = app_spec['config'] if 'config' in app_spec else []
 
         # TODO: Support to / from other service envs
@@ -503,6 +503,23 @@ def create_userapp(username, userapp, spec_map):
                 # generate password if none is provided
                 configmap_data[cfg['name']] = generate_random_password()
 
+        stack_service['config'] = configmap_data
+
+        # TODO: Support custom volume mounts?
+        app_mounts = []
+        if 'volumeMounts' in app_spec:
+            for vol in app_spec['volumeMounts']:
+                logger.debug('Adding vol mount: ' + str(vol))
+                app_mount = client.V1VolumeMount(
+                    name="home",
+                    mount_path=vol['mountPath'],
+                    sub_path=vol['defaultPath'] if 'defaultPath' in vol else f'AppData/{userapp_id}-{service_key}',
+                    read_only=vol['readOnly'] if 'readOnly' in vol else False
+                )
+                logger.debug('Created app mount: ' + str(app_mount))
+                app_mounts.append(app_mount)
+
+        logger.debug('Adding app mounts: ' + str(app_mounts))
         # Create one container per-stack service
         container = {
             'name': stack_service_id,
@@ -511,6 +528,7 @@ def create_userapp(username, userapp, spec_map):
             'command': stack_service['command'] if 'command' in stack_service else None,
             'image': stack_service['image'] if 'image' in stack_service else app_spec['image'],
             'configmap': resource_name,
+            'volume_mounts': app_mounts,
             'prestop': stack_service['prestop'] if 'prestop' in stack_service else None,
             'poststart': stack_service['poststart'] if 'poststart' in stack_service else None,
             'ports': service_ports,
@@ -900,15 +918,15 @@ def create_deployment(deployment_name, containers, labels, username, **kwargs):
     service_account_name = kwargs['service_account'] if 'service_account' in kwargs else None
 
     # Mount in user home / shared storage, if necessary
-    volumes = []
-    volume_mounts = []
+    shared_volumes = []
+    shared_volume_mounts = []
     enable_home_storage = backend_config['userapps']['home_storage'][
         'enabled'] if 'userapps' in backend_config and 'home_storage' in backend_config[
         'userapps'] and 'enabled' in backend_config['userapps']['home_storage'] else False
     if enable_home_storage:
         home_pvc_name = get_home_pvc_name(username)
-        volume_mounts += client.V1VolumeMount(name="home", mount_path='/home/' + username, read_only=False),
-        volumes += client.V1Volume(name="home", persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
+        shared_volume_mounts += client.V1VolumeMount(name="home", mount_path='/home/' + username, read_only=False),
+        shared_volumes += client.V1Volume(name="home", persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
             claim_name=home_pvc_name,
             read_only=False
         )),
@@ -926,8 +944,8 @@ def create_deployment(deployment_name, containers, labels, username, **kwargs):
         shared_storage_read_only = backend_config['userapps']['shared_storage'][
             'read_only'] if 'userapps' in backend_config and 'shared_storage' in backend_config[
             'userapps'] and 'read_only' in backend_config['userapps']['shared_storage'] else False
-        volume_mounts += client.V1VolumeMount(name="shared", mount_path=shared_storage_mount_path, read_only=shared_storage_read_only),
-        volumes += client.V1Volume(name="shared", persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
+        shared_volume_mounts += client.V1VolumeMount(name="shared", mount_path=shared_storage_mount_path, read_only=shared_storage_read_only),
+        shared_volumes += client.V1Volume(name="shared", persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
             claim_name=shared_storage_claim_name,
             read_only=shared_storage_read_only
         )),
@@ -935,13 +953,13 @@ def create_deployment(deployment_name, containers, labels, username, **kwargs):
     # Build a podspec from given containers and other parameters
     podspec = client.V1PodSpec(
         service_account_name=service_account_name,
-        volumes=volumes,
+        volumes=shared_volumes,
         init_containers=init_containers,
         containers=[
             client.V1Container(
                 name=container['name'],
                 command=container['command'],
-                volume_mounts=volume_mounts,
+                volume_mounts=shared_volume_mounts + (container['volume_mounts'] if 'volume_mounts' in container else []),
                 # TODO: resource limits
                 # resources=V1ResourceRequirements(),
                 #

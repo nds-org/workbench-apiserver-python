@@ -911,10 +911,12 @@ definitions:
   VolumeMount:
     type: object
     properties:
+      defaultPath:
+        type: string
       mountPath:
         type: string
-      name:
-        type: string
+    required:
+      - mountPath
   Service:
     x-groupName: "ndslabs.org"
     x-version: "v1"

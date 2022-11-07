@@ -99,6 +99,7 @@ def create_stack(user, token_info, stack):
         }
         containers.append(container)
     deployment = kube.create_deployment(deployment_name=app_name, replicas=0,
+                                        username=kube.get_username(user),
                                         namespace=namespace, labels=labels,
                                         containers=containers)
 

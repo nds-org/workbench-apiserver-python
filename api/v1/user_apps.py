@@ -106,8 +106,8 @@ def create_userapp(stack, user, token_info):
     except Exception as e:
         # Cleanup failed userapp resources
         kube.destroy_userapp(username=username, userapp=stack)
-        logger.error('Failed to create userapp: %s' % str(e))
-        return {'error': 'Failed to create userapp: %s' % str(e)}, 400
+        logger.error(f'Failed to create userapp: {str(type(e))} {e}')
+        return {'error': f'Failed to create userapp: {str(type(e))} {e}'}, 400
 
 
 def get_userapp_by_id(stack_id, user, token_info):
