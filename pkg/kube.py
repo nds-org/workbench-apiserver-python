@@ -220,17 +220,22 @@ class KubeEventWatcher:
         }
         logger.info('KubeWatcher looking for required labels: ' + str(required_labels))
 
+        resource_version = ''
+
         while True:
             time.sleep(1)
             logger.info('KubeWatcher is connecting: ' + str(ignored_namespaces))
             try:
                 # Resource version is used to keep track of stream progress (in case of resume)
                 self.stream = w.stream(func=v1.list_pod_for_all_namespaces,
-                                       timeout_seconds=0)
+                                       timeout_seconds=0,
+                                       resource_version=resource_version)
 
                 # Parse events in the stream for Pod phase updates
                 for event in self.stream:
-                    logger.info('Received pod event: %s' % str(event))
+                    logger.debug('Received pod event: %s' % str(event))
+
+                    resource_version = event['object'].metadata.resourceVersion
 
                     # Skip Pods in ignored namespaces
                     if event['object'].metadata.namespace in ignored_namespaces:
@@ -288,21 +293,29 @@ class KubeEventWatcher:
                         'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s  endpoints=%s' % (
                         userapp_id, service_key, type, phase, service_status, str(service_endpoints)))
             except urllib3.exceptions.ProtocolError as e:
-                logger.error('Connection to Kube API has been lost. Killing application.')
-                sys.exit(1)
+                logger.error('KubeWatcher reconnecting to Kube API: %s' % str(e))
+                if self.stream:
+                    self.stream.close()
+                self.stream = None
+                time.sleep(2)
+                continue
             except ApiException as e:
                 if e.status != 410:
                     logger.error("Connection to kube API failed: " + str(e))
+                if self.stream:
+                    self.stream.close()
+                self.stream = None
                 time.sleep(2)
                 continue
 
     def is_alive(self):
-        return self.thread.is_alive()
+        return self.thread and self.thread.is_alive()
 
     def close(self):
-        if self.thread is None:
-            return
-        if self.thread.is_alive():
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+        if self.is_alive():
             self.thread.join(timeout=3)
             self.thread = None
 
@@ -506,20 +519,22 @@ def create_userapp(username, userapp, spec_map):
         stack_service['config'] = configmap_data
 
         # TODO: Support custom volume mounts?
-        app_mounts = []
+        userapp_mounts = {}
+        volume_mounts = []
         if 'volumeMounts' in app_spec:
             for vol in app_spec['volumeMounts']:
-                logger.debug('Adding vol mount: ' + str(vol))
-                app_mount = client.V1VolumeMount(
+                sub_path = vol['defaultPath'] if 'defaultPath' in vol else f'AppData/{userapp_id}-{service_key}'
+                mount_path = vol['mountPath']
+                userapp_mounts[sub_path] = mount_path
+                volume_mounts.append(client.V1VolumeMount(
                     name="home",
-                    mount_path=vol['mountPath'],
-                    sub_path=vol['defaultPath'] if 'defaultPath' in vol else f'AppData/{userapp_id}-{service_key}',
+                    mount_path=mount_path,
+                    sub_path=sub_path,
                     read_only=vol['readOnly'] if 'readOnly' in vol else False
-                )
-                logger.debug('Created app mount: ' + str(app_mount))
-                app_mounts.append(app_mount)
+                ))
 
-        logger.debug('Adding app mounts: ' + str(app_mounts))
+        stack_service['volume_mounts'] = userapp_mounts
+
         # Create one container per-stack service
         container = {
             'name': stack_service_id,
@@ -528,7 +543,8 @@ def create_userapp(username, userapp, spec_map):
             'command': stack_service['command'] if 'command' in stack_service else None,
             'image': stack_service['image'] if 'image' in stack_service else app_spec['image'],
             'configmap': resource_name,
-            'volume_mounts': app_mounts,
+            'security_context': app_spec['securityContext'] if 'securityContext' in app_spec else None,
+            'volume_mounts': volume_mounts,
             'prestop': stack_service['prestop'] if 'prestop' in stack_service else None,
             'poststart': stack_service['poststart'] if 'poststart' in stack_service else None,
             'ports': service_ports,
@@ -959,10 +975,24 @@ def create_deployment(deployment_name, containers, labels, username, **kwargs):
             client.V1Container(
                 name=container['name'],
                 command=container['command'],
+                security_context=client.V1SecurityContext(
+                    capabilities=client.V1Capabilities(
+                        add=container['security_context']['capabilities']['add'] if 'add' in container['security_context']['capabilities'] else None
+                    ) if 'capabilities' in container['security_context'] and container['security_context']['capabilities'] else None,
+                    privileged=container['security_context']['privileged'] if 'security_context' in container and 'privileged' in container['security_context'] else None,
+                    run_as_user=container['security_context']['runAsUser'] if 'runAsUser' in container['security_context'] else None,
+                    run_as_group=container['security_context']['runAsGroup'] if 'runAsGroup' in container['security_context'] else None,
+                    run_as_non_root=container['security_context']['runAsNonRoot'] if 'runAsNonRoot' in container['security_context'] else None,
+                    proc_mount=container['security_context']['procMount'] if 'procMount' in container['security_context'] else None,
+                    read_only_root_filesystem=container['security_context']['readOnlyRootFilesystem'] if 'readOnlyRootFilesystem' in container['security_context'] else None,
+                    allow_privilege_escalation=container['security_context']['allowPrivilegeEscalation'] if 'allowPrivilegeEscalation' in container['security_context'] else None,
+
+                ) if 'security_context' in container and container['security_context'] else None,
                 volume_mounts=shared_volume_mounts + (container['volume_mounts'] if 'volume_mounts' in container else []),
-                # TODO: resource limits
+                # TODO: support resource limits?
                 # resources=V1ResourceRequirements(),
-                #
+
+
                 # create configmap with env vars
                 env_from=[
                     client.V1EnvFromSource(
@@ -972,7 +1002,7 @@ def create_deployment(deployment_name, containers, labels, username, **kwargs):
                     )
                 ],
                 #
-                # TODO: container.lifecycle?
+                # TODO: support container.lifecycle?
                 lifecycle=container['lifecycle'] if 'lifecycle' in container else None,
                 image=get_image_string(container['image']),
                 ports=[
