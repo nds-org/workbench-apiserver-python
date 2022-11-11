@@ -954,6 +954,30 @@ definitions:
         type: string
       maintainer:
         type: string
+      securityContext:
+        type: object
+        properties:
+          privileged:
+            type: boolean
+          allowPrivilegeEscalation:
+            type: boolean
+          runAsUser:
+            type: integer
+          runAsGroup:
+            type: integer
+          procMount:
+            type: string
+          readOnlyRootFilesystem:
+            type: boolean
+          runAsNonRoot:
+            type: boolean
+          capabilities:
+            type: object
+            properties:
+              add:
+                type: array
+                items:
+                  type: string
       logo:
         type: string
       info:
