@@ -235,7 +235,7 @@ class KubeEventWatcher:
                 for event in self.stream:
                     logger.debug('Received pod event: %s' % str(event))
 
-                    resource_version = event['object'].metadata.resourceVersion
+                    resource_version = event['object'].metadata.resource_version
 
                     # Skip Pods in ignored namespaces
                     if event['object'].metadata.namespace in ignored_namespaces:
