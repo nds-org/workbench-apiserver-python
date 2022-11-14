@@ -24,15 +24,9 @@ pymongo==4.0.1
 # Deprecated: etcd (use mongo instead)
 python-etcd==0.4.5
 
-# ZeroMQ
-pyzmq==23.2.0
-
-# SocketIO
-#python-socketio==5.7.0
-
 # RabbitMQ
 rabbitpy==2.0.1
 
 # Manual validation?
-# jsonschema==3.2.0
-# openapi2jsonschema==0.9.1
+jsonschema==3.2.0
+openapi2jsonschema==0.9.1

@@ -1,0 +1,46 @@
+{
+  "support_email": "",
+  "analytics_tracking_id": "",
+  "domain": "https://kubernetes.docker.internal",
+  "signin_url": "https://kubernetes.docker.internal/oauth2/start?rd=https%3A%2F%2Fkubernetes.docker.internal%2Fmy-apps",
+  "signout_url": "https://kubernetes.docker.internal/oauth2/sign_out?rd=https%3A%2F%2Fkubernetes.docker.internal%2F",
+  "customization": {
+    "brand_logo_path": "/favicon.svg",
+    "favicon_path": "/favicon.svg",
+    "org_name": "NCSA",
+    "help_links": [
+      {
+        "icon": "fa-info-circle",
+        "name": "Feature Overview",
+        "url": "https://nationaldataservice.atlassian.net/wiki/display/NDSC/Feature+Overview"
+      },
+      {
+        "icon": "fa-question-circle",
+        "name": "FAQ",
+        "url": "https://nationaldataservice.atlassian.net/wiki/display/NDSC/Frequently+Asked+Questions"
+      },
+      {
+        "icon": "fa-book",
+        "name": "User's Guide",
+        "url": "https://nationaldataservice.atlassian.net/wiki/display/NDSC/User%27s+Guide"
+      },
+      {
+        "icon": "fa-code-fork",
+        "name": "Developer's Guide",
+        "url": "https://nationaldataservice.atlassian.net/wiki/display/NDSC/Developer%27s+Guide"
+      },
+      {
+        "icon": "fa-gavel",
+        "name": "Acceptable Use Policy",
+        "url": "https://nationaldataservice.atlassian.net/wiki/display/NDSC/Acceptable+Use+Policy"
+      }
+    ],
+    "landing_html": "<span style='font-size:20pt;'><p>Labs Workbench is an environment where developers can prototype tools and capabilities</p><p>that help build out the NDS framework and services. In particular, it is a place that can</p><p>host the development activities of <a style='text-decoration:none;' href='http://www.nationaldataservice.org/projects/pilots.html'>NDS pilot projects</a></p></span>",
+    "landing_header_1": "Find the tools you need",
+    "landing_section_1": "Search our catalog of web-based research and software tools. We offer over 30 different software tools that fit many common scenarios encountered in research software development.  Find a set of tools to help you build out a new software product or extend an existing one.",
+    "landing_header_2": "Run the tools on our cloud service",
+    "landing_section_2": "Once you've narrowed down your choices, launch your desired tool set on our cloud resources. Access your running applications using our web interface, and start integrating the tools and shaping your software product.",
+    "learn_more_url": "http://www.nationaldataservice.org/platform/workbench.html",
+    "product_name": "Workbench"
+  }
+}

@@ -115,6 +115,10 @@ def check_token(user, token_info):
         return {'error': 'Invalid token'}, 401
 
 
+def get_user_me(user, token_info):
+    return token_info
+
+
 def validate_o_auth_token():
     OAUTH2_PROXY_COOKIE_NAME = '_oauth2_proxy'
     oauth2_cookie = connexion.request.cookies.get(OAUTH2_PROXY_COOKIE_NAME, default=None)
@@ -125,5 +129,7 @@ def validate_o_auth_token():
 
         if resp:
             user = resp.json()
-            logger.info(f'Found user: {user}')
-
+            print(f'Found user: {user}')
+            return {'user': user}, 200
+    else:
+        return {'error': 'Deprecated'}, 501   # 401

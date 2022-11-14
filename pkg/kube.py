@@ -8,15 +8,13 @@ import time
 import threading
 
 import urllib3
-import zmq
 from kubernetes import watch, client, config as kubeconfig
 from kubernetes.stream import stream
 from kubernetes.client import ApiException
 from requests import HTTPError
 
 from pkg import config
-from pkg.auth import jwt
-from pkg.config import KUBE_WORKBENCH_NAMESPACE, KUBE_WORKBENCH_RESOURCE_PREFIX
+from pkg.config import KUBE_WORKBENCH_NAMESPACE, KUBE_WORKBENCH_RESOURCE_PREFIX, backend_config
 from pkg.db.datastore import data_store
 from pkg.exceptions import AppSpecNotFoundError
 
@@ -54,6 +52,7 @@ client.api_client.rest.logger.setLevel(logging.WARNING)
 #            w.stop()
 
 def determine_new_endpoints(userapp_id, username, service_key, conditions):
+    username = get_username(username)
     # logger.debug('Pod Conditions: %s' % conditions)
     service_endpoints = []
     if conditions is not None:
@@ -93,8 +92,8 @@ def determine_new_endpoints(userapp_id, username, service_key, conditions):
                     # Port is not typically used (possibly in dev, but even then probably not)
                     actual_port = nodePort if nodePort else port if port else ''
 
-                    # Use username+appId+portnumber for ingress host
-                    prefix = get_resource_name(userapp_id, service_key)
+                    # Use username+appId+serviceKey for ingress host
+                    prefix = get_resource_name(get_username(username), userapp_id, service_key)
 
                     # TODO: Handle multiple ports? e.g. rabbitmq 5672 + 15672?
                     #  if actual_port is '' else get_resource_name(username, userapp_id, str(actual_port))
@@ -142,32 +141,49 @@ def determine_new_status(type, phase):
 
 
 def write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip, service_endpoints):
+    username = get_username(username)
     userapp = data_store.retrieve_userapp_by_id(userapp_id=userapp_id, username=username)
     if userapp is not None:
         services = userapp['services']
         for service in services:
             if service['service'] == service_key:
                 ssid = '%s-%s' % (userapp_id, service_key)
-                logger.debug('%s -> %s (owned by %s)' % (ssid, service_status, username))
 
-                service['internalIP'] = pod_ip
-                service['status'] = service_status
-                service['endpoints'] = service_endpoints
+                # Only write if needed (ignore no-ops)
+                should_update = False
 
-        # if all services running, set whole app state to running
-        running_services = [x['service'] for x in services if x['status'] == 'started']
-        if len(running_services) == len(services):
-            userapp['status'] = 'started'
-            logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'running', username))
+                # Ignore status updates in the wrong direction
+                if userapp['status'] == 'stopping' and service_status != 'started' \
+                        or userapp['status'] == 'starting' and service_status != 'stopped':
+                    logger.debug('%s -> %s (owned by %s)' % (ssid, service_status, username))
+                    service['status'] = service_status
+                    should_update = True
 
-        # if all services stopped, set whole app state to stopped
-        stopped_services = [x['service'] for x in services if x['status'] == 'stopped']
-        if len(stopped_services) == len(services):
-            userapp['status'] = 'stopped'
-            logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'stopped', username))
+                if service['endpoints'] != service_endpoints:
+                    service['endpoints'] = service_endpoints
+                    should_update = True
 
-        # Assume success?
-        result = data_store.update_userapp(userapp)
+                if 'internalIP' not in service or service['internalIP'] != pod_ip:
+                    service['internalIP'] = pod_ip
+                    should_update = True
+
+                # if all services running, set whole app state to running
+                started_services = [x['service'] for x in services if x['status'] == 'started']
+                if userapp['status'] != 'stopping' and userapp['status'] != 'started' and len(started_services) == len(services):
+                    userapp['status'] = 'started'
+                    logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'started', username))
+                    should_update = True
+
+                # if all services stopped, set whole app state to stopped
+                stopped_services = [x['service'] for x in services if x['status'] == 'stopped']
+                if userapp['status'] != 'starting' and userapp['status'] != 'stopped' and len(stopped_services) == len(services):
+                    userapp['status'] = 'stopped'
+                    logger.debug('%s -> %s (owned by %s)' % (userapp_id, 'stopped', username))
+                    should_update = True
+
+                # Assume success?
+                if should_update:
+                    result = data_store.update_userapp(userapp)
     else:
         logger.warning('Unable to update status and endpoints: Userapp not found: %s %s' % (username, userapp_id))
 
@@ -179,20 +195,19 @@ class KubeEventWatcher:
         self.thread = threading.Thread(target=self.run, name='kube-event-watcher', daemon=True)
 
         self.stream = None
-        logger.info('Starting Kube event watcher')
+        logger.info('Starting KubeWatcher')
         self.thread.start()
+        logger.info('Started KubeWatcher')
 
     def run(self):
         w = watch.Watch()
         v1 = client.CoreV1Api()
         appsv1 = client.AppsV1Api()
 
-        # Resource version is used to keep track of stream progress (in case of resume)
-        resource_version = ""
-
         # Ignore kube-system namespace
         # TODO: Parameterize this?
         ignored_namespaces = ['kube-system']
+        logger.info('KubeWatcher watching all namespaces except for: ' + str(ignored_namespaces))
 
         # Include workbench app labels
         # Example:      'labels': {'manager': 'workbench',
@@ -203,29 +218,38 @@ class KubeEventWatcher:
         required_labels = {
             'manager': 'workbench'
         }
+        logger.info('KubeWatcher looking for required labels: ' + str(required_labels))
+
+        resource_version = ''
 
         while True:
             time.sleep(1)
+            logger.info('KubeWatcher is connecting: ' + str(ignored_namespaces))
             try:
                 # Resource version is used to keep track of stream progress (in case of resume)
-                self.stream = w.stream(func=v1.list_pod_for_all_namespaces, resource_version=resource_version, timeout_seconds=0)
-                resource_version = v1.list_pod_for_all_namespaces().metadata.resource_version
+                self.stream = w.stream(func=v1.list_pod_for_all_namespaces,
+                                       timeout_seconds=0,
+                                       resource_version=resource_version)
 
                 # Parse events in the stream for Pod phase updates
                 for event in self.stream:
+                    logger.debug('Received pod event: %s' % str(event))
+
+                    resource_version = event['object'].metadata.resource_version
+
                     # Skip Pods in ignored namespaces
                     if event['object'].metadata.namespace in ignored_namespaces:
+                        logger.info('Skipping event in excluded namespace')
                         continue
 
-                    # logger.debug('Received pod event: %s' % str(event['object'].phase))
-
                     # Examine labels, ignore if not workbench app
-                    #logger.debug('Event recv\'d: %s' % event)
+                    # logger.debug('Event recv\'d: %s' % event)
                     labels = event['object'].metadata.labels
 
                     missing_labels = [x for x in required_labels if x not in labels]
                     if len(missing_labels) > 0:
-                        self.logger.warning('WARNING: Skipping due to missing required label(s): ' + str(missing_labels))
+                        self.logger.warning(
+                            'WARNING: Skipping due to missing required label(s): ' + str(missing_labels))
                         continue
 
                     # TODO: lookup associated userapp using resource name
@@ -237,10 +261,20 @@ class KubeEventWatcher:
                         self.logger.warning('WARNING: Invalid number of segments -  PodName=%s' % name)
                         continue
 
-                    userapp_id = segments[0]
-                    username = labels['user']
+                    username = segments[0]
+                    userapp_id = segments[1]
                     # sid-stackkey-svckey-deploymentsuffix-podsuffix => we want 3rd to last
-                    service_key = segments[-3]
+                    if config.KUBE_WORKBENCH_SINGLEPOD:
+                        # TODO: Status events for singlepod mode
+                        logger.warning('Workbench cannot yet update stack status automatically when singlepod=True')
+
+                        userapp_key = segments[2]
+                        continue
+
+                    # Not running in singlepod mode, so names have 5 segments instead
+                    # username-sid-svckey-deploymentsuffix-podsuffix => we want 3rd to last
+
+                    service_key = segments[2]
 
                     type = event['type']
                     phase = event['object'].status.phase
@@ -248,31 +282,40 @@ class KubeEventWatcher:
                     pod_ip = event['object'].status.pod_ip
                     if pod_ip is None:
                         pod_ip = ''
-                    self.logger.info(' >>>> POD IP: ' + pod_ip)
 
                     # Calculate new status/endpoints and write to db
                     service_endpoints = determine_new_endpoints(userapp_id, username, service_key, conditions)
                     service_status = determine_new_status(type, phase)
-                    write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip, service_endpoints)
+                    write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip,
+                                               service_endpoints)
 
-                    logger.debug(
-                        'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s' % (userapp_id, service_key, type, phase, service_status))
+                    logger.info(
+                        'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s  endpoints=%s' % (
+                        userapp_id, service_key, type, phase, service_status, str(service_endpoints)))
             except urllib3.exceptions.ProtocolError as e:
-                logger.error('Connection to Kube API has been lost. Killing application.')
-                sys.exit(1)
+                logger.error('KubeWatcher reconnecting to Kube API: %s' % str(e))
+                if self.stream:
+                    self.stream.close()
+                self.stream = None
+                time.sleep(2)
+                continue
             except ApiException as e:
                 if e.status != 410:
                     logger.error("Connection to kube API failed: " + str(e))
+                if self.stream:
+                    self.stream.close()
+                self.stream = None
                 time.sleep(2)
                 continue
 
     def is_alive(self):
-        return self.thread.is_alive()
+        return self.thread and self.thread.is_alive()
 
     def close(self):
-        if self.thread is None:
-            return
-        if self.thread.is_alive():
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+        if self.is_alive():
             self.thread.join(timeout=3)
             self.thread = None
 
@@ -315,7 +358,7 @@ def open_exec_userapp_interactive(user, ssid, ws):
         logger.exception(" >>> Exception encountered:", e)
     finally:
         ws.send('CONNECTION CLOSED')
-        #ws.close()
+        # ws.close()
         if resp.is_open():
             resp.close()
 
@@ -342,13 +385,17 @@ def get_resource_name(*args):
         return "-".join(args)
 
 
+def get_username(username):
+    return username.replace('@', '').replace('.', '')
+
+
 def get_resource_namespace(username):
     if is_single_namespace():
         return KUBE_WORKBENCH_NAMESPACE
     else:
         # TODO: Prefix with KUBE_WORKBENCH_RESOURCE_PREFIX?
         # TODO: better to use KUBE_WORKBENCH_NAMESPACE?
-        return username
+        return get_username(username)
 
 
 # TODO: Replace with explicit boolean
@@ -397,7 +444,7 @@ def initialize():
 # Create necessary resources for a new user
 def init_user(username):
     namespace = get_resource_namespace(username)
-    # resource_name = get_resource_name(username)
+    # resource_name = get_resource_name(get_username(username))
 
     if not is_single_namespace():
         try:
@@ -420,7 +467,8 @@ def init_user(username):
 
 
 def get_init_container(username, spec_key, svc_key):
-    return { 'name': 'wait-for', 'image': 'ghcr.io/groundnuty/k8s-wait-for:v1.6', 'imagePullPolicy': 'Always', 'args': ['pod', '-lworkbench_svc'] }
+    return {'name': 'wait-for', 'image': 'ghcr.io/groundnuty/k8s-wait-for:v1.6', 'imagePullPolicy': 'Always',
+            'args': ['pod', '-lworkbench_svc']}
 
 
 # Creates the Kubernetes resources related to a userapp
@@ -434,7 +482,7 @@ def create_userapp(username, userapp, spec_map):
 
     labels = {
         'manager': 'workbench',
-        'user': username,
+        'user': get_username(username),
         'workbench-app': userapp_id
     }
 
@@ -444,25 +492,48 @@ def create_userapp(username, userapp, spec_map):
         app_spec = spec_map.get(service_key, None)
         svc_labels = labels.copy()
         svc_labels['workbench-svc'] = service_key
-        print("Created svc_labels: " + str(svc_labels))
+        logger.info("Created svc_labels: " + str(svc_labels))
         if app_spec is None:
             logger.error("Failed to find app_spec: %s" % service_key)
             raise AppSpecNotFoundError("Failed to find app_spec: %s" % service_key)
         stack_service_id = get_stack_service_id(userapp_id, service_key)
-        resource_name = get_resource_name(userapp_id, userapp_key, service_key)
+        resource_name = get_resource_name(get_username(username), userapp_id, service_key)
         service_ports = app_spec['ports'] if 'ports' in app_spec else []
-        ingress_hosts[stack_service_id] = service_ports
+        ingress_hosts[resource_name] = service_ports
 
         # Build up config from userapp env/config and appspec config
-        configmap_data = userapp['config'] if 'config' in userapp else {}
+        configmap_data = stack_service['config'] if 'config' in stack_service else {}
         spec_config = app_spec['config'] if 'config' in app_spec else []
+
+        # TODO: Support to / from other service envs
         for cfg in spec_config:
-            if not cfg['canOverride']:
+            if 'canOverride' in cfg and not cfg['canOverride']:
                 # reset to spec value if we can't override
-                configmap_data[cfg.name] = cfg['value'] if 'value' in cfg else ''
-            if cfg['isPassword'] and cfg['canOverride'] and not cfg['value']:
+                configmap_data[cfg['name']] = cfg['value'] if 'value' in cfg else ''
+            if ('isPassword' in cfg and cfg['isPassword']) and \
+                    ('canOverride' in cfg and cfg['canOverride']) and \
+                    not cfg['value']:
                 # generate password if none is provided
-                configmap_data[cfg.name] = generate_random_password()
+                configmap_data[cfg['name']] = generate_random_password()
+
+        stack_service['config'] = configmap_data
+
+        # TODO: Support custom volume mounts?
+        userapp_mounts = {}
+        volume_mounts = []
+        if 'volumeMounts' in app_spec:
+            for vol in app_spec['volumeMounts']:
+                sub_path = vol['defaultPath'] if 'defaultPath' in vol else f'AppData/{userapp_id}-{service_key}'
+                mount_path = vol['mountPath']
+                userapp_mounts[sub_path] = mount_path
+                volume_mounts.append(client.V1VolumeMount(
+                    name="home",
+                    mount_path=mount_path,
+                    sub_path=sub_path,
+                    read_only=vol['readOnly'] if 'readOnly' in vol else False
+                ))
+
+        stack_service['volume_mounts'] = userapp_mounts
 
         # Create one container per-stack service
         container = {
@@ -471,7 +542,9 @@ def create_userapp(username, userapp, spec_map):
                 'resourceLimits'] if 'resourceLimits' in app_spec else {},
             'command': stack_service['command'] if 'command' in stack_service else None,
             'image': stack_service['image'] if 'image' in stack_service else app_spec['image'],
-            'configmap': resource_name,  # not currently used
+            'configmap': resource_name,
+            'security_context': app_spec['securityContext'] if 'securityContext' in app_spec else None,
+            'volume_mounts': volume_mounts,
             'prestop': stack_service['prestop'] if 'prestop' in stack_service else None,
             'poststart': stack_service['poststart'] if 'poststart' in stack_service else None,
             'ports': service_ports,
@@ -480,44 +553,76 @@ def create_userapp(username, userapp, spec_map):
         containers.append(container)
 
         # Create one Kubernetes service per-stack service
-        create_service(service_name=resource_name,
-                       namespace=namespace, labels=svc_labels,
-                       service_ports=service_ports)
+        logger.info("Creating service with resource name: " + str(resource_name))
+        if len(service_ports) > 0:
+            create_service(service_name=resource_name,
+                           namespace=namespace, labels=svc_labels,
+                           service_ports=service_ports)
 
-        if len(configmap_data) > 0:
-            # Create one Kubernetes configmap per-stack service
-            create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
+        # Create one Kubernetes configmap per-stack service
+        create_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
 
+        init_containers = []
         if not should_run_as_single_pod:
             #         - name: wait-for-volume-ceph
-            #           image: ghcr.io/groundnuty/k8s-wait-for:v1.6
+            #           image:
             #           imagePullPolicy: Always
             #           args:
             #             - "pod"
             #             - "-lapp=develop-volume-ceph-krakow"
-            init_containers = [
+            if 'depends' in app_spec:
+                init_containers = [
+                    client.V1Container(name='wait-for-dep-' + dep['key'],
+                                       image='ghcr.io/groundnuty/k8s-wait-for:v1.6',
+                                       image_pull_policy='Always',
+                                       args=[
+                                           "pod",
+                                           "-lmanager=workbench",
+                                           "-lworkbench-app=" + userapp_id,
+                                           "-luser=" + get_username(username),
+                                           "-lworkbench-svc=" + dep['key']
+                                       ]) for dep in app_spec['depends'] if dep['required']
+                ]
 
-            ]
+            service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
 
             # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
-            create_deployment(deployment_name=get_resource_name(userapp_id, userapp_key, service_key),
+            create_deployment(deployment_name=resource_name,
                               namespace=namespace,
                               replicas=0,
+                              service_account=service_account,
+                              username=get_username(username),
                               init_containers=init_containers,
                               labels=svc_labels,
-                              containers=[container])
+                              containers=[container],
+                              collocate=userapp_id if 'collocate' in app_spec and app_spec['collocate'] else False)
 
     # Create one ingress per-stack
-    create_ingress(ingress_name=get_resource_name(userapp_id, userapp_key),
-                   namespace=namespace, labels=labels,
-                   ingress_hosts=ingress_hosts)
+    if len(ingress_hosts.keys()) > 0:
+        userapp_annotations = backend_config['userapps']['ingress']['annotations'] \
+            if 'userapps' in backend_config \
+               and 'ingress' in backend_config['userapps'] \
+               and 'annotations' in backend_config['userapps']['ingress'] else {}
+        ingress_class_name = backend_config['userapps']['ingress']['class'] \
+            if 'userapps' in backend_config \
+               and 'ingress' in backend_config['userapps'] \
+               and 'class' in backend_config['userapps']['ingress'] else None
+        create_ingress(ingress_name=get_resource_name(get_username(username), userapp_id, userapp_key),
+                       namespace=namespace, labels=labels,
+                       ingress_hosts=ingress_hosts,
+                       annotations=userapp_annotations,
+                       ingress_class_name=ingress_class_name)
 
     if should_run_as_single_pod:
+        service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
 
+        # No need to collocate, since all will run in single pod
         # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
-        create_deployment(deployment_name=get_resource_name(userapp_id, userapp_key),
+        create_deployment(deployment_name=get_resource_name(get_username(username), userapp_id, userapp_key),
                           namespace=namespace,
                           replicas=0,
+                          service_account=service_account,
+                          username=get_username(username),
                           labels=labels,
                           # TODO: how to wait for deps in singlepod mode?
                           # init_containers=init_containers,
@@ -530,7 +635,7 @@ def update_userapp_replicas(username, userapp_id, replicas):
         return False
     spec_key = userapp['key']
 
-    name = get_resource_name(userapp_id, spec_key)
+    name = get_resource_name(get_username(username), userapp_id, spec_key)
     namespace = get_resource_namespace(username)
     result = patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
 
@@ -540,50 +645,65 @@ def update_userapp_replicas(username, userapp_id, replicas):
     return True
 
 
+def update_userapp(username, userapp_id, userapp):
+    for svc in userapp['services']:
+        service_key = svc['service']
+        resource_name = get_resource_name(get_username(username), userapp_id, service_key)
+        namespace = get_resource_namespace(username)
+
+        # Build up config from userapp env/config and appspec config
+        configmap_data = svc['config'] if 'config' in svc else {}
+
+        logger.info("Saving configmap data: " + str(configmap_data))
+
+        update_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
+
+
 def patch_scale_userapp(username, userapp, replicas):
-
-
-    # FIXME:
     userapp_id = userapp['id']
     namespace = get_resource_namespace(username)
 
-    # TODO: startup dependency validation - do they all exist?
-    # TODO: include wait_for in init_containers
-    # TODO: see https://github.com/groundnuty/k8s-wait-for
-
     should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else config.KUBE_WORKBENCH_SINGLEPOD
     if should_run_as_single_pod:
-        deployment_name = get_resource_name(userapp_id, userapp['key'])
-        return patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas)
+        deployment_name = get_resource_name(get_username(username), userapp_id, userapp['key'])
+        patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas)
+        return True
     else:
         results = []
         # TODO: how to check results
         for stack_service in userapp['services']:
             service_key = stack_service['service']
-            name = get_resource_name(userapp_id, userapp['key'], service_key)
-            patch_scale_deployment(deployment_name=name, namespace=namespace, replicas=replicas)
-        return True
+            deployment_name = get_resource_name(get_username(username), userapp_id, service_key)
+            results.append(
+                patch_scale_deployment(deployment_name=deployment_name, namespace=namespace, replicas=replicas))
+        return False not in results
+
 
 # Cleans up the Kubernetes resources related to a userapp
 def destroy_userapp(username, userapp):
     userapp_id = userapp['id']
     userapp_key = userapp['key']
-    name = get_resource_name(userapp_id, userapp_key)
+    name = get_resource_name(get_username(username), userapp_id, userapp_key)
     namespace = get_resource_namespace(username)
+
+    logger.debug(f'Deleting Ingress: {name}')
     delete_ingress(name=name, namespace=namespace)
     # TODO: networkpolicy? (currently unused)
 
-    should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else True
+    should_run_as_single_pod = userapp['singlePod'] if 'singlePod' in userapp else config.KUBE_WORKBENCH_SINGLEPOD
     if should_run_as_single_pod:
+        logger.debug(f'Deleting Deployment (singlepod): {name}')
         delete_deployment(name=name, namespace=namespace)
-
 
     for stack_service in userapp['services']:
         service_key = stack_service['service']
-        name = get_resource_name(userapp_id, userapp_key, service_key)
+        name = get_resource_name(get_username(username), userapp_id, service_key)
         if not should_run_as_single_pod:
+            logger.debug(f'Deleting Deployment ({service_key}): {name}')
             delete_deployment(name=name, namespace=namespace)
+        logger.debug(f'Deleting Service: {name}')
         delete_service(name=name, namespace=namespace)
+        logger.debug(f'Deleting ConfigMap: {name}')
         delete_configmap(name=name, namespace=namespace)
 
     return
@@ -635,19 +755,23 @@ def get_deployment(name, namespace):
 def patch_scale_deployment(deployment_name, namespace, replicas) -> bool:
     # No-op if we can't find the deployment
     deployment = get_deployment(name=deployment_name, namespace=namespace)
+    logger.info(f'Patching {deployment_name} to replicas={str(replicas)}')
     if deployment is None:
         # TODO: Raise an error here?
+        logger.error("Failed to find deployment: " + str(deployment_name))
         return False
 
-    # No-op if we have our desired number of replicas
+    # No-op if we already have our desired number of replicas
     current_repl = deployment.spec.replicas
     if current_repl == replicas:
         logger.debug("No-op for setting replicas number: %d -> %d" % (current_repl, replicas))
         return False
 
     # Query number of replicas
-    return client.AppsV1Api().patch_namespaced_deployment_scale(namespace=namespace, name=deployment_name,
-                                                                body={'spec': {'replicas': replicas}})
+    result = client.AppsV1Api().patch_namespaced_deployment_scale(namespace=namespace, name=deployment_name,
+                                                                  body={'spec': {'replicas': replicas}})
+    logger.info("Patch Result: " + str(result))
+    return result
 
 
 def create_configmap(configmap_name, configmap_data, **kwargs):
@@ -778,16 +902,29 @@ def get_image_string(container_image):
     return '%s/%s:%s' % (repo, name, tag) if repo is not None else '%s:%s' % (name, tag)
 
 
+def get_home_pvc_name(user):
+    pvc_suffix = backend_config['userapps']['home_storage'][
+        'claim_suffix'] if 'userapps' in backend_config and 'home_storage' in backend_config[
+        'userapps'] and 'claim_suffix' in backend_config['userapps']['home_storage'] else 'home-data'
+    return get_resource_name(get_username(user), pvc_suffix)
+
+
+def get_home_storage_class():
+    return backend_config['userapps']['home_storage'][
+        'storage_class'] if 'userapps' in backend_config and 'home_storage' in backend_config[
+        'userapps'] and 'storage_class' in backend_config['userapps']['home_storage'] else None
+
+
 # Containers:
 #   "busybox" -> { name, configmap, image, lifecycle, ports, command }
-def create_deployment(deployment_name, containers, labels, **kwargs):
+def create_deployment(deployment_name, containers, labels, username, **kwargs):
     appv1 = client.AppsV1Api()
 
     # TODO: Validation
     deployment_labels = labels
     deployment_namespace = kwargs['namespace'] if 'namespace' in kwargs else 'default'
     deployment_annotations = kwargs['annotations'] if 'annotations' in kwargs else {}
-
+    deployment_collocate_label = kwargs['collocate'] if 'collocate' in kwargs else False
     deployment_replicas = kwargs['replicas'] if 'replicas' in kwargs else 0
 
     init_containers = kwargs['init_containers'] if 'init_containers' in kwargs else []
@@ -796,26 +933,76 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
 
     service_account_name = kwargs['service_account'] if 'service_account' in kwargs else None
 
+    # Mount in user home / shared storage, if necessary
+    shared_volumes = []
+    shared_volume_mounts = []
+    enable_home_storage = backend_config['userapps']['home_storage'][
+        'enabled'] if 'userapps' in backend_config and 'home_storage' in backend_config[
+        'userapps'] and 'enabled' in backend_config['userapps']['home_storage'] else False
+    if enable_home_storage:
+        home_pvc_name = get_home_pvc_name(username)
+        shared_volume_mounts += client.V1VolumeMount(name="home", mount_path='/home/' + username, read_only=False),
+        shared_volumes += client.V1Volume(name="home", persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
+            claim_name=home_pvc_name,
+            read_only=False
+        )),
+
+    enable_shared_storage = backend_config['userapps']['shared_storage'][
+        'enabled'] if 'userapps' in backend_config and 'shared_storage' in backend_config[
+        'userapps'] and 'enabled' in backend_config['userapps']['shared_storage'] else False
+    if enable_shared_storage:
+        shared_storage_claim_name = backend_config['userapps']['shared_storage'][
+            'claim_name'] if 'userapps' in backend_config and 'shared_storage' in backend_config[
+            'userapps'] and 'claim_name' in backend_config['userapps']['shared_storage'] else 'workbench-shared-storage'
+        shared_storage_mount_path = backend_config['userapps']['shared_storage'][
+            'mount_path'] if 'userapps' in backend_config and 'shared_storage' in backend_config[
+            'userapps'] and 'mount_path' in backend_config['userapps']['shared_storage'] else '/shared'
+        shared_storage_read_only = backend_config['userapps']['shared_storage'][
+            'read_only'] if 'userapps' in backend_config and 'shared_storage' in backend_config[
+            'userapps'] and 'read_only' in backend_config['userapps']['shared_storage'] else False
+        shared_volume_mounts += client.V1VolumeMount(name="shared", mount_path=shared_storage_mount_path, read_only=shared_storage_read_only),
+        shared_volumes += client.V1Volume(name="shared", persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
+            claim_name=shared_storage_claim_name,
+            read_only=shared_storage_read_only
+        )),
+
     # Build a podspec from given containers and other parameters
     podspec = client.V1PodSpec(
         service_account_name=service_account_name,
+        volumes=shared_volumes,
+        init_containers=init_containers,
         containers=[
             client.V1Container(
                 name=container['name'],
                 command=container['command'],
-                # TODO: resource limits
+                security_context=client.V1SecurityContext(
+                    capabilities=client.V1Capabilities(
+                        add=container['security_context']['capabilities']['add'] if 'add' in container['security_context']['capabilities'] else None
+                    ) if 'capabilities' in container['security_context'] and container['security_context']['capabilities'] else None,
+                    privileged=container['security_context']['privileged'] if 'security_context' in container and 'privileged' in container['security_context'] else None,
+                    run_as_user=container['security_context']['runAsUser'] if 'runAsUser' in container['security_context'] else None,
+                    run_as_group=container['security_context']['runAsGroup'] if 'runAsGroup' in container['security_context'] else None,
+                    run_as_non_root=container['security_context']['runAsNonRoot'] if 'runAsNonRoot' in container['security_context'] else None,
+                    proc_mount=container['security_context']['procMount'] if 'procMount' in container['security_context'] else None,
+                    read_only_root_filesystem=container['security_context']['readOnlyRootFilesystem'] if 'readOnlyRootFilesystem' in container['security_context'] else None,
+                    allow_privilege_escalation=container['security_context']['allowPrivilegeEscalation'] if 'allowPrivilegeEscalation' in container['security_context'] else None,
+
+                ) if 'security_context' in container and container['security_context'] else None,
+                volume_mounts=shared_volume_mounts + (container['volume_mounts'] if 'volume_mounts' in container else []),
+                # TODO: support resource limits?
                 # resources=V1ResourceRequirements(),
+
+
+                # create configmap with env vars
+                env_from=[
+                    client.V1EnvFromSource(
+                        config_map_ref=client.V1ConfigMapEnvSource(
+                            name=container['configmap']
+                        )
+                    )
+                ],
                 #
-                # TODO: create configmap with env
-                # env_from=[
-                #     client.V1EnvFromSource(
-                #         config_map_ref=client.V1ConfigMapEnvSource(
-                #             name=container['configmap']
-                #         )
-                #     )
-                # ],
-                #
-                # TODO: container.lifecycle?
+                # TODO: support container.lifecycle?
                 lifecycle=container['lifecycle'] if 'lifecycle' in container else None,
                 image=get_image_string(container['image']),
                 ports=[
@@ -828,6 +1015,27 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
                 ]
             ) for container in containers
         ])
+
+    # Schedule pods on same node, if requested
+    if deployment_collocate_label:
+        podspec.affinity = client.V1Affinity(
+            pod_affinity=client.V1PodAffinity(
+                required_during_scheduling_ignored_during_execution=[
+                    client.V1PodAffinityTerm(
+                        topology_key="kubernetes.io/hostname",
+                        label_selector=client.V1LabelSelector(
+                            match_expressions=[
+                                client.V1LabelSelectorRequirement(
+                                    key="workbench-app",
+                                    operator="In",
+                                    values=[deployment_collocate_label]
+                                )
+                            ]
+                        )
+                    )
+                ]
+            )
+        )
 
     try:
         body = client.V1Deployment(
@@ -849,7 +1057,7 @@ def create_deployment(deployment_name, containers, labels, **kwargs):
                         annotations=podspec_annotations,
                         labels=deployment_labels
                     ),
-                    spec=podspec
+                    spec=podspec,
                 )
             )
         )
@@ -936,55 +1144,70 @@ def delete_service(name, namespace):
 
 
 def create_ingress(ingress_name, ingress_hosts, labels, **kwargs):
-    networkingv1 = client.NetworkingV1Api()
     print("Creating ingress resource:")
 
     # TODO: Validation
     ingress_labels = labels
     ingress_namespace = kwargs['namespace'] if 'namespace' in kwargs else 'default'
+    ingress_class_name = kwargs['ingress_class_name'] if 'ingress_class_name' in kwargs else None
     ingress_annotations = kwargs['annotations'] if 'annotations' in kwargs else {}
 
-    try:
-        ingress = networkingv1.create_namespaced_ingress_with_http_info(ingress_namespace, client.V1Ingress(
-            api_version='networking.k8s.io/v1',
-            kind='Ingress',
-            metadata=client.V1ObjectMeta(
-                name=ingress_name,
-                namespace=ingress_namespace,
-                annotations=ingress_annotations,
-                labels=ingress_labels,
-            ),
-            spec=client.V1IngressSpec(rules=[
-                client.V1IngressRule(
-                    host='%s.%s' % (stack_service_id, config.DOMAIN),
-                    http=client.V1HTTPIngressRuleValue(
-                        paths=[client.V1HTTPIngressPath(
-                            path_type='ImplementationSpecific',
-                            path='/',  # Since we use host-based routing
-                            backend=client.V1IngressBackend(
-                                service=client.V1IngressServiceBackend(
-                                    name=port['name'] if 'name' in port else stack_service_id,
-                                    port=client.V1ServiceBackendPort(
-                                        number=port['port']
+    ingress_domain = config.DOMAIN
+
+    non_empty_rules = {}
+    for service_name in ingress_hosts.keys():
+        for port in ingress_hosts[service_name]:
+            if service_name not in non_empty_rules:
+                non_empty_rules[service_name] = []
+            non_empty_rules[service_name] += port
+
+    if len(non_empty_rules.keys()) > 0:
+        try:
+            ingress_input = client.V1Ingress(
+                api_version='networking.k8s.io/v1',
+                kind='Ingress',
+                metadata=client.V1ObjectMeta(
+                    name=ingress_name,
+                    namespace=ingress_namespace,
+                    annotations=ingress_annotations,
+                    labels=ingress_labels,
+                ),
+                spec=client.V1IngressSpec(rules=[
+                    client.V1IngressRule(
+                        host='%s.%s' % (service_name, ingress_domain),
+                        http=client.V1HTTPIngressRuleValue(
+                            paths=[client.V1HTTPIngressPath(
+                                path_type='ImplementationSpecific',
+                                path='/',  # Since we use host-based routing
+                                backend=client.V1IngressBackend(
+                                    service=client.V1IngressServiceBackend(
+                                        name=port['name'] if 'name' in port else service_name,
+                                        port=client.V1ServiceBackendPort(
+                                            number=port['port']
+                                        )
                                     )
                                 )
-                            )
-                        ) for port in ingress_hosts[stack_service_id]]
-                    )
-                ) for stack_service_id in ingress_hosts.keys()
-            ])
-        ))
-        logger.debug("Created ingress resource: " + str(ingress))
-        # for i in ret.items:
-        #    logger.debug("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
-        return ingress
+                            ) for port in ingress_hosts[service_name]]
+                        )
+                    ) for service_name in non_empty_rules.keys()
+                ],
+                    tls=[client.V1IngressTLS(hosts=[ingress_domain, '*.' + ingress_domain])],
+                    ingress_class_name=ingress_class_name)
+            )
 
-    except (ApiException, HTTPError) as exc:
-        if isinstance(exc, ApiException) and exc.status == 409:
-            return None
-        else:
-            logger.error("Error creating ingress resource: %s" % str(exc))
-            raise exc
+            ingress = client.NetworkingV1Api().create_namespaced_ingress_with_http_info(ingress_namespace, ingress_input)
+
+            logger.debug("Created ingress resource: " + str(ingress))
+            # for i in ret.items:
+            #    logger.debug("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
+            return ingress
+
+        except (ApiException, HTTPError) as exc:
+            if isinstance(exc, ApiException) and exc.status == 409:
+                return None
+            else:
+                logger.error("Error creating ingress resource: %s" % str(exc))
+                raise exc
 
 
 def delete_ingress(name, namespace):
@@ -1000,24 +1223,17 @@ def delete_ingress(name, namespace):
             raise exc
 
 
-
 # Include workbench app labels
 # Example:      'labels': {'manager': 'workbench',
 #                          'pod-template-hash': '977967b76',
 #                          'user': 'test',
 #                          'workbench-app': 's00402'}
 def get_pod_name(user, ssid):
-
     namespace = get_resource_namespace(username=user)
     id_segments = ssid.split('-')
 
-    if is_single_pod:
-        userapp_id = id_segments[0]
-        service_key = id_segments[1]
-    else:
-        userapp_id = id_segments[0]
-        # stack_key = id_segments[1]  # not needed here
-        service_key = id_segments[2]
+    userapp_id = id_segments[0]
+    service_key = id_segments[1]
 
     print(f"Looking up pod for user={user} for ssid={ssid} within userapp={userapp_id}")
 
@@ -1026,7 +1242,8 @@ def get_pod_name(user, ssid):
                                  label_selector='manager=%s,user=%s,workbench-app=%s,workbench-svc=%s' %
                                                 ('workbench', user, userapp_id, service_key))
     if len(ret.items) > 1:
-        print(f"Warning: {len(ret.items)} matches found for user={user} for ssid={ssid} within userapp={userapp_id}. Assuming first Running/Ready pod.")
+        print(
+            f"Warning: {len(ret.items)} matches found for user={user} for ssid={ssid} within userapp={userapp_id}. Assuming first Running/Ready pod.")
     elif len(ret.items) == 0:
         print(f"Warning: no matches found for user={user} for ssid={ssid} within userapp={userapp_id}")
     print("Searching...")
@@ -1040,7 +1257,6 @@ def get_pod_name(user, ssid):
 
     raise Exception("Failed to find pod name for: " + user + "/" + ssid)
     # return { 'name': ingress_name, 'namespace': ingress_namespace }, 201
-
 
 
 def get_pods():
