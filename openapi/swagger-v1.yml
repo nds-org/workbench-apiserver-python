@@ -85,12 +85,14 @@ paths:
       operationId: 'get_version'
       x-swagger-router-controller: 'api.v1.system'
       description: |
-        Retrieve the server version
+        Retrieve the server version from the Swagger spec
       responses:
         '200':
           description: OK
           schema:
             type: string
+        '404':
+          description: Not found
   /authenticate:
     post:
       tags:

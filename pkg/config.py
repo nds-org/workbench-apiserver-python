@@ -15,6 +15,8 @@ logger = logging.getLogger('config')
 BACKEND_CFG_PATH = os.getenv('BACKEND_CFG_PATH', './env/backend.json')
 FRONTEND_CFG_PATH = os.getenv('FRONTEND_CFG_PATH', './env/frontend.json')
 
+# First fetch to /api/v1/version will cache this
+VERSION_NUMBER = None
 
 # Read app/env/backend.json and frontend/json
 with open(FRONTEND_CFG_PATH) as f:
