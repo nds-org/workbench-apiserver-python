@@ -224,7 +224,7 @@ class KubeEventWatcher:
 
         while True:
             time.sleep(1)
-            logger.info('KubeWatcher is connecting: ' + str(ignored_namespaces))
+            logger.info('KubeWatcher is connecting...')
             try:
                 # Resource version is used to keep track of stream progress (in case of resume)
                 self.stream = w.stream(func=v1.list_pod_for_all_namespaces,
@@ -239,7 +239,7 @@ class KubeEventWatcher:
 
                     # Skip Pods in ignored namespaces
                     if event['object'].metadata.namespace in ignored_namespaces:
-                        logger.info('Skipping event in excluded namespace')
+                        logger.debug('Skipping event in excluded namespace')
                         continue
 
                     # Examine labels, ignore if not workbench app
@@ -362,8 +362,6 @@ def open_exec_userapp_interactive(user, ssid, ws):
         if resp.is_open():
             resp.close()
 
-        logger.info("Success! :D")
-
 
 def generate_random_password(length=16):
     # choose from all lowercase letter
@@ -426,7 +424,7 @@ def initialize():
             logger.warning('Failed to load any cluster config.. this might not work.')
 
     host = kubeconfig.kube_config.Configuration().host
-    logging.info("KUBE HOST INFO: {}".format(host))
+    logging.info("Connecting to Kubernetes API: {}".format(host))
 
     if is_single_namespace():
         logger.debug("Starting in single-namespace mode: " + config.KUBE_WORKBENCH_NAMESPACE)
@@ -486,13 +484,12 @@ def create_userapp(username, userapp, spec_map):
         'workbench-app': userapp_id
     }
 
-    logger.info("Map of specs: %s" % spec_map)
+    #logger.debug("Map of specs: %s" % spec_map)
     for stack_service in userapp['services']:
         service_key = stack_service['service']
         app_spec = spec_map.get(service_key, None)
         svc_labels = labels.copy()
         svc_labels['workbench-svc'] = service_key
-        logger.info("Created svc_labels: " + str(svc_labels))
         if app_spec is None:
             logger.error("Failed to find app_spec: %s" % service_key)
             raise AppSpecNotFoundError("Failed to find app_spec: %s" % service_key)
@@ -523,7 +520,22 @@ def create_userapp(username, userapp, spec_map):
         volume_mounts = []
         if 'volumeMounts' in app_spec:
             for vol in app_spec['volumeMounts']:
-                sub_path = vol['defaultPath'] if 'defaultPath' in vol else f'AppData/{userapp_id}-{service_key}'
+                # If path is the root
+                if 'defaultPath' in vol:
+                    if vol['defaultPath'] != '/':
+                        # default path is not the root, use it as a relative path
+                        if str.startswith(vol['defaultPath'], '/'):
+                            # Make path relative if given an absolute
+                            sub_path = vol['defaultPath'][1:]
+                        else:
+                            # Path is relative, use as-is
+                            sub_path = vol['defaultPath']
+                    else:
+                        # default path is the root - mount the whole volume (no sub_path)
+                        sub_path = ''
+                else:
+                    # No default path specified, make a local folder
+                    sub_path = f'AppData/{userapp_id}-{service_key}'
                 mount_path = vol['mountPath']
                 userapp_mounts[sub_path] = mount_path
                 volume_mounts.append(client.V1VolumeMount(
@@ -553,7 +565,6 @@ def create_userapp(username, userapp, spec_map):
         containers.append(container)
 
         # Create one Kubernetes service per-stack service
-        logger.info("Creating service with resource name: " + str(resource_name))
         if len(service_ports) > 0:
             create_service(service_name=resource_name,
                            namespace=namespace, labels=svc_labels,
@@ -654,7 +665,7 @@ def update_userapp(username, userapp_id, userapp):
         # Build up config from userapp env/config and appspec config
         configmap_data = svc['config'] if 'config' in svc else {}
 
-        logger.info("Saving configmap data: " + str(configmap_data))
+        logger.debug("Saving configmap data: " + str(configmap_data))
 
         update_configmap(namespace=namespace, configmap_name=resource_name, configmap_data=configmap_data)
 
@@ -770,7 +781,7 @@ def patch_scale_deployment(deployment_name, namespace, replicas) -> bool:
     # Query number of replicas
     result = client.AppsV1Api().patch_namespaced_deployment_scale(namespace=namespace, name=deployment_name,
                                                                   body={'spec': {'replicas': replicas}})
-    logger.info("Patch Result: " + str(result))
+    logger.debug("Patch Result: " + str(result))
     return result
 
 
@@ -1062,7 +1073,7 @@ def create_deployment(deployment_name, containers, labels, username, **kwargs):
             )
         )
 
-        logger.info("Creating deployment resource: %s" % str(body))
+        logger.info("Creating deployment resource: %s" % str(deployment_name))
         deployment = appv1.create_namespaced_deployment(namespace=deployment_namespace, body=body)
         logger.debug("Created deployment resource: %s" % str(deployment))
         return deployment
@@ -1099,6 +1110,7 @@ def create_service(service_name, service_ports, labels, **kwargs):
     service_annotations = kwargs['annotations'] if 'annotations' in kwargs else {}
 
     try:
+        logger.info("Creating service with resource name: " + str(service_name))
         service = v1.create_namespaced_service(namespace=service_namespace, body=client.V1Service(
             api_version='v1',
             kind='Service',
