@@ -220,21 +220,20 @@ class KubeEventWatcher:
         }
         logger.info('KubeWatcher looking for required labels: ' + str(required_labels))
 
-        resource_version = ''
+        resource_version = None
+        k8s_event_stream = None
 
         while True:
             time.sleep(1)
             logger.info('KubeWatcher is connecting...')
             try:
                 # Resource version is used to keep track of stream progress (in case of resume)
-                self.stream = w.stream(func=v1.list_pod_for_all_namespaces,
-                                       timeout_seconds=0,
-                                       resource_version=resource_version)
+                k8s_event_stream = w.stream(func=v1.list_pod_for_all_namespaces,
+                                            timeout_seconds=0,
+                                            resource_version=resource_version)
 
                 # Parse events in the stream for Pod phase updates
-                for event in self.stream:
-                    logger.debug('Received pod event: %s' % str(event))
-
+                for event in k8s_event_stream:
                     resource_version = event['object'].metadata.resource_version
 
                     # Skip Pods in ignored namespaces
@@ -294,17 +293,19 @@ class KubeEventWatcher:
                         userapp_id, service_key, type, phase, service_status, str(service_endpoints)))
             except urllib3.exceptions.ProtocolError as e:
                 logger.error('KubeWatcher reconnecting to Kube API: %s' % str(e))
-                if self.stream:
-                    self.stream.close()
-                self.stream = None
+                if k8s_event_stream:
+                    k8s_event_stream.close()
+                k8s_event_stream = None
                 time.sleep(2)
                 continue
-            except ApiException as e:
-                if e.status != 410:
-                    logger.error("Connection to kube API failed: " + str(e))
-                if self.stream:
-                    self.stream.close()
-                self.stream = None
+            except (ApiException, HTTPError) as e:
+                if k8s_event_stream:
+                    k8s_event_stream.close()
+                k8s_event_stream = None
+                logger.error("Connection to kube API failed: " + str(e))
+                if e.status == 410:
+                    # Resource too old
+                    resource_version = None
                 time.sleep(2)
                 continue
 
