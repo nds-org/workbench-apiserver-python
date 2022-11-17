@@ -513,6 +513,8 @@ def create_userapp(username, userapp, spec_map):
                     not cfg['value']:
                 # generate password if none is provided
                 configmap_data[cfg['name']] = generate_random_password()
+            else:
+                configmap_data[cfg['name']] = cfg['value'] if 'value' in cfg else ''
 
         stack_service['config'] = configmap_data
 
