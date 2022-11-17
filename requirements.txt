@@ -21,8 +21,8 @@ kubernetes==23.6.0
 # MongoDB
 pymongo==4.0.1
 
-# Deprecated: etcd (use mongo instead)
-python-etcd==0.4.5
+# git
+gitpython==3.1.29
 
 # RabbitMQ
 rabbitpy==2.0.1
