@@ -2,7 +2,7 @@ import connexion
 import logging
 
 from pkg import config
-from yaml import load
+from yaml import load, SafeLoader
 
 import git
 
@@ -23,7 +23,7 @@ def get_version():
         try:
             with open(config.SWAGGER_URL) as f:
                 yaml_str = f.read()
-                yaml_spec = load(yaml_str)
+                yaml_spec = load(yaml_str, Loader=SafeLoader)
                 config.VERSION_NUMBER = yaml_spec['info']['version']
         except:
             pass
