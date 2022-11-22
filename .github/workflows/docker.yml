@@ -45,7 +45,7 @@ jobs:
             IMAGE: apiserver
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       # calculate some variables that are used later
       - name: github branch
