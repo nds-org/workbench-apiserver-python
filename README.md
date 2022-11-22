@@ -1,9 +1,9 @@
 # Workbench API server rewritten in Python
-This project utilizes a Swagger spec compatible work Workbench V1.
+This project utilizes a Swagger spec compatible with Workbench V1.
 
 ## Prerequisites
-* A running MongoDB (by default)
-* Or a running etcd (legacy)
+* A running MongoDB
+* A running Kubernetes cluster
 
 ## Usage
 This project offers a fairly standard Docker image that can be built and run using common patterns.
@@ -13,8 +13,9 @@ To run the pre-built Docker image:
 ```bash
 $ docker run -itd -e KEYCLOAK_HOST="https://gateway.docker.internal/auth" \
                   -e MONGO_URI="mongodb://gateway.docker.internal:27017/ndslabs?authSource=admin" \
+                  -v $(pwd)/backend.json:/app/env/backend.json \
                   -p 5000:5000 \
-                  ndslabs/apiserver:python
+                  ndslabs/apiserver:develop
 ```
 
 ### Configuration
@@ -53,8 +54,6 @@ TODOs and/or proposed or currently unused config items.
 |----------------------------|--------------------------------|----------------------------------------------------------------------------|----------------|
 | --                         | `timeout`                      | Default startup timeout for userapps                                       | `30`           |
 | --                         | `inactivity_timeout`           | Default inactivity timeout for userapps                                    | `30`           |
-| --                         | `specs.repo`                   | Repo to import appspecs                                                    | `30`           |
-| --                         | `specs.branch`                 | Branch to import appspecs                                                  | `30`           |
 | --                         | `storage.home.claim_suffix`    | Suffix to append to the names of user "home" PVCs                          | `-home`        |
 | --                         | `storage.home.storage_class`   | Removed: Replaced by `storage_class`                                       | `nfs`          |
 | --                         | `storage.shared.enabled`       | If true, mount shared storage to each user pod                             | `false`        |
@@ -69,6 +68,13 @@ Clone this repo:
 $ git clone https://github.com/nds-org/workbench-apiserver-python
 ```
 
+### With Docker
+To rebuild the Docker image from source:
+```bash
+$ docker build -t ndslabs/apiserver:develop .
+```
+
+### Without Docker
 Install Python dependencies:
 ```bash
 $ pip install -r requirements.txt
@@ -77,11 +83,6 @@ $ pip install -r requirements.txt
 Run the application locally (for testing):
 ```bash
 $ python server.py
-```
-
-To rebuild the Docker image from source:
-```bash
-$ docker build -t ndslabs/apiserver:python .
 ```
 
 ## Generating CRDs

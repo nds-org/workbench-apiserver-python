@@ -2,8 +2,7 @@ README.md
 .github/
 .gitignore
 .dockerignore
-idea/
-docker/
+.idea/
 Dockerfile
 cookies
 venv/
