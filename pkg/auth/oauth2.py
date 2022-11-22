@@ -1,4 +1,5 @@
 import json
+import re
 
 import requests
 import logging
@@ -35,7 +36,9 @@ def userinfo(access_token) -> dict:
         for grp in user['groups']:
             roles.append(grp)
 
-        sub = user['preferredUsername'].replace('@', '').replace('.', '')
+        # sub = user['preferredUsername'].replace('@', '').replace('.', '')
+        email = user['email']
+        username = re.sub(r'[^a-zA-Z0-9]', '', email)
 
         # TODO: Hoping that oauth2-proxy enhances support for providing arbitrary token claims from OIDC
         # See https://github.com/oauth2-proxy/oauth2-proxy/issues/834
@@ -44,7 +47,7 @@ def userinfo(access_token) -> dict:
             'groups': roles,
             # 'family_name': user['family_name'],
             # 'given_name': user['given_name'],
-            'sub': sub
+            'sub': username
         }
     except Exception as e:
         logger.warning("OAuth2 token verification failed: " + str(e))

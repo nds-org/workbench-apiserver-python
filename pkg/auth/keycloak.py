@@ -1,4 +1,5 @@
 import json
+import re
 
 import requests
 from werkzeug.exceptions import Unauthorized
@@ -53,6 +54,10 @@ def userinfo(access_token) -> dict:
                 for role in user['resource_access'][client_name]['roles']:
                     groups.append(f"role:{client_name}:{role}")
 
+        # sub = user['preferred_username'].replace('@', '').replace('.', '')
+        email = user['email']
+        username = re.sub(r'[^a-zA-Z0-9]', '', email)
+
         # TODO: oauth2-proxy does not support arbitrary claims yet, so excluding name for consistency
         # See https://github.com/oauth2-proxy/oauth2-proxy/issues/834
         return {
@@ -60,7 +65,7 @@ def userinfo(access_token) -> dict:
             'groups': groups,
             # 'family_name': user['family_name'],
             # 'given_name': user['given_name'],
-            'sub': user['preferred_username'].replace('@', '').replace('.', '')
+            'sub': username
         }
     except Exception as e:
         logger.warning("Keycloak token verification failed: " + str(e))
