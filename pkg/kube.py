@@ -1213,7 +1213,7 @@ def create_ingress(ingress_name, ingress_hosts, labels, **kwargs):
                         )
                     ) for service_name in non_empty_rules.keys()
                 ],
-                    tls=[client.V1IngressTLS(hosts=[ingress_domain, '*.' + ingress_domain])],
+                    tls=[client.V1IngressTLS(hosts=[ingress_domain, '*.' + ingress_domain], secret_name=ingress_tls_secret_name)],
                     ingress_class_name=ingress_class_name)
             )
 
