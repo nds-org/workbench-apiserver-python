@@ -621,9 +621,15 @@ def create_userapp(username, userapp, spec_map):
             if 'userapps' in backend_config \
                and 'ingress' in backend_config['userapps'] \
                and 'class' in backend_config['userapps']['ingress'] else None
+        ingress_tls_secret_name = backend_config['userapps']['ingress']['tls']['secretName'] \
+            if 'userapps' in backend_config \
+               and 'ingress' in backend_config['userapps'] \
+               and 'tls' in backend_config['userapps']['ingress'] \
+               and 'secretName' in backend_config['userapps']['ingress']['tls'] else None
         create_ingress(ingress_name=get_resource_name(get_username(username), userapp_id, userapp_key),
                        namespace=namespace, labels=labels,
                        ingress_hosts=ingress_hosts,
+                       ingress_tls_secret_name=ingress_tls_secret_name,
                        annotations=userapp_annotations,
                        ingress_class_name=ingress_class_name)
 
@@ -1165,6 +1171,7 @@ def create_ingress(ingress_name, ingress_hosts, labels, **kwargs):
     ingress_labels = labels
     ingress_namespace = kwargs['namespace'] if 'namespace' in kwargs else 'default'
     ingress_class_name = kwargs['ingress_class_name'] if 'ingress_class_name' in kwargs else None
+    ingress_tls_secret_name = kwargs['ingress_tls_secret_name'] if 'ingress_tls_secret_name' in kwargs else None
     ingress_annotations = kwargs['annotations'] if 'annotations' in kwargs else {}
 
     ingress_domain = config.DOMAIN
