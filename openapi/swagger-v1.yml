@@ -90,7 +90,12 @@ paths:
         '200':
           description: OK
           schema:
-            type: string
+            type: object
+            properties:
+              version:
+                type: string
+              hash:
+                type: string
         '404':
           description: Not found
   /authenticate:
