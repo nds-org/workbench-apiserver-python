@@ -122,13 +122,12 @@ class MongoStore:
         return MongoStore.serialize(appspec)
 
     def update_user_appspec(self, username, updated_appspec) -> UpdateResult:
-        updated_appspec['catalog'] = 'user'
+        spec = {i: updated_appspec[i] for i in updated_appspec if i != '_id'}
         updated_appspec['creator'] = username
         spec_key = updated_appspec['key']
         return self.db[APPSPECS_COLLECTION_NAME].update_one(filter={'key': spec_key,
-                                                                    'catalog': 'user',
                                                                     'creator': username},
-                                                            update={'$set': updated_appspec})
+                                                            update={'$set': spec})
 
     def update_system_appspec(self, updated_appspec) -> UpdateResult:
         spec_key = updated_appspec['key']

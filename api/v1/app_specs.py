@@ -126,11 +126,31 @@ def update_service(service_id, service, user, token_info):
         if 'creator' in service and existing_spec['creator'] != service['creator']:
             return {'error': 'appspec cannot change creator'}, 403
 
-        # Do not let user modify ID
-        service['_id'] = existing_spec['_id']
+        # Image is required
+        existing_spec['image'] = service['image']
+
+        # Basic Info
+        existing_spec['label'] = service['label'] if 'label' in service else ''
+        existing_spec['access'] = service['access'] if 'access' in service else 'external'
+        existing_spec['display'] = service['display'] if 'display' in service else 'stack'
+        existing_spec['info'] = service['info'] if 'info' in service else ''
+        existing_spec['logo'] = service['logo'] if 'logo' in service else ''
+        existing_spec['maintainer'] = service['maintainer'] if 'maintainer' in service else ''
+        existing_spec['description'] = service['description'] if 'description' in service else ''
+
+        # Other tabs
+        existing_spec['ports'] = service['ports'] if 'ports' in service else []
+        existing_spec['config'] = service['config'] if 'config' in service else []
+        existing_spec['dependencies'] = service['dependencies'] if 'dependencies' in service else []
+
+        # Currently Hidden
+        existing_spec['resourceLimits'] = service['resourceLimits'] if 'resourceLimits' in service else {}
+        existing_spec['readinessProbe'] = service['readinessProbe'] if 'readinessProbe' in service else {}
+        existing_spec['repositories'] = service['repositories'] if 'repositories' in service else []
+        existing_spec['securityContext'] = service['securityContext'] if 'securityContext' in service else {}
 
         # TODO: should we use NotModified?
-        updated = data_store.update_user_appspec(user, service)
+        updated = data_store.update_user_appspec(user, existing_spec)
         status_code = 200   # if updated > 0 else 304
         return data_store.retrieve_user_appspec_by_key(user, spec_key), status_code
 
