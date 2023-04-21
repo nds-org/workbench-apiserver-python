@@ -556,6 +556,7 @@ def create_userapp(username, userapp, spec_map):
             'resourceLimits': stack_service['resourceLimits'] if 'resourceLimits' in stack_service else app_spec[
                 'resourceLimits'] if 'resourceLimits' in app_spec else {},
             'command': stack_service['command'] if 'command' in stack_service else None,
+            'args': stack_service['args'] if 'args' in stack_service else None,
             'image': stack_service['image'] if 'image' in stack_service else app_spec['image'],
             'configmap': resource_name,
             'security_context': app_spec['securityContext'] if 'securityContext' in app_spec else None,
@@ -995,6 +996,7 @@ def create_deployment(deployment_name, containers, labels, username, **kwargs):
             client.V1Container(
                 name=container['name'],
                 command=container['command'],
+                args=container['args'],
                 security_context=client.V1SecurityContext(
                     capabilities=client.V1Capabilities(
                         add=container['security_context']['capabilities']['add'] if 'add' in container['security_context']['capabilities'] else None
