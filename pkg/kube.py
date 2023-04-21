@@ -555,8 +555,10 @@ def create_userapp(username, userapp, spec_map):
             'name': stack_service_id,
             'resourceLimits': stack_service['resourceLimits'] if 'resourceLimits' in stack_service else app_spec[
                 'resourceLimits'] if 'resourceLimits' in app_spec else {},
-            'command': stack_service['command'] if 'command' in stack_service else None,
-            'args': stack_service['args'] if 'args' in stack_service else None,
+            'command': stack_service['command'] if 'command' in stack_service else app_spec[
+                'command'] if 'command' in app_spec else None,
+            'args': stack_service['args'] if 'args' in stack_service else app_spec[
+                'args'] if 'args' in app_spec else None,
             'image': stack_service['image'] if 'image' in stack_service else app_spec['image'],
             'configmap': resource_name,
             'security_context': app_spec['securityContext'] if 'securityContext' in app_spec else None,
