@@ -92,9 +92,15 @@ paths:
           schema:
             type: object
             properties:
+              name:
+                type: string
               version:
                 type: string
               hash:
+                type: string
+              branch:
+                type: string
+              buildnumber:
                 type: string
         '404':
           description: Not found
