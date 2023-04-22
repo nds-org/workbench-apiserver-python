@@ -9,15 +9,13 @@ import logging
 from jose import jwk
 from jose.utils import base64url_decode
 
+from yaml import load, SafeLoader
+
 
 logger = logging.getLogger('config')
 
 BACKEND_CFG_PATH = os.getenv('BACKEND_CFG_PATH', './env/backend.json')
 FRONTEND_CFG_PATH = os.getenv('FRONTEND_CFG_PATH', './env/frontend.json')
-
-# First fetch to /api/v1/version will cache this
-VERSION_NUMBER = None
-VERSION_HASH = None
 
 # Read app/env/backend.json and frontend/json
 with open(FRONTEND_CFG_PATH) as f:
@@ -47,8 +45,24 @@ KUBE_WORKBENCH_NAMESPACE = os.getenv('KUBE_WORKBENCH_NAMESPACE', backend_config[
 KUBE_WORKBENCH_SINGLEPOD = os.getenv('KUBE_WORKBENCH_SINGLEPOD', backend_config['userapps']['singlepod'] if 'userapps' in backend_config and 'singlepod' in backend_config['userapps'] else False)
 KUBE_PVC_STORAGECLASS = os.getenv('KUBE_PVC_STORAGECLASS', backend_config['userapps']['home']['storage_class'] if 'userapps' in backend_config and 'home' in backend_config['userapps'] and 'storage_class' in backend_config['userapps']['home'] else None)
 
+# If defined, use the Swagger spec at this URL
 SWAGGER_URL = os.getenv('SWAGGER_URL', backend_config['swagger_url'] if 'swagger_url' in backend_config else 'openapi/swagger-v1.yml')
 
+# Fetch version metadata from build args (git branch/version/SHA hash)
+VERSION_HASH = os.getenv('GITSHA1', None)
+VERSION_BRANCH = os.getenv('BRANCH', None)
+VERSION_BUILDNUMBER = os.getenv('BUILDNUMBER', None)
+VERSION_NAME = os.getenv('VERSION', None)
+
+# Fetch version number from Swagger spec
+VERSION_NUMBER = None
+try:
+    with open(SWAGGER_URL) as f:
+        yaml_str = f.read()
+        yaml_spec = load(yaml_str, Loader=SafeLoader)
+        VERSION_NUMBER = yaml_spec['info']['version']
+except:
+    pass
 
 # Downloads a remote swagger spec from the configured SWAGGER_URL and save it to a temp file.
 # Returns the path to the temp file created.
