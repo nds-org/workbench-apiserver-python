@@ -138,10 +138,15 @@ def update_service(service_id, service, user, token_info):
         existing_spec['maintainer'] = service['maintainer'] if 'maintainer' in service else ''
         existing_spec['description'] = service['description'] if 'description' in service else ''
 
+        # Command / args
+        existing_spec['command'] = service['command'] if 'command' in service else []
+        existing_spec['args'] = service['args'] if 'arg' in service else []
+
         # Other tabs
         existing_spec['ports'] = service['ports'] if 'ports' in service else []
         existing_spec['config'] = service['config'] if 'config' in service else []
-        existing_spec['dependencies'] = service['dependencies'] if 'dependencies' in service else []
+        existing_spec['depends'] = service['depends'] if 'depends' in service else []
+        existing_spec['volumeMounts'] = service['volumeMounts'] if 'volumeMounts' in service else []
 
         # Currently Hidden
         existing_spec['resourceLimits'] = service['resourceLimits'] if 'resourceLimits' in service else {}
