@@ -442,9 +442,12 @@ def initialize():
 
 # Create necessary resources for a new user
 def init_user(username):
+    username = get_username(username)
     namespace = get_resource_namespace(username)
-    # resource_name = get_resource_name(get_username(username))
 
+    # Ensure user home PVC exists
+    pvc_name = get_home_pvc_name(username)
+    storage_class = get_home_storage_class()
     if not is_single_namespace():
         try:
             create_namespace(namespace_name=namespace)
@@ -454,7 +457,7 @@ def init_user(username):
                 raise e
 
     try:
-        create_persistent_volume_claim(namespace=namespace, pvc_name=username)
+        create_persistent_volume_claim(namespace=namespace, pvc_name=pvc_name, storage_class=storage_class)
     except ApiException as e:
         # Ignore conflict - creation of these resources is idempotent
         if e.status != 409:

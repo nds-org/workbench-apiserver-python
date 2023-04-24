@@ -57,18 +57,6 @@ def to_spec_map(specs, existing_map=None):
     return spec_map
 
 
-def ensure_create_home_pvc(user):
-    username = kube.get_username(user)
-
-    # Ensure user home PVC exists
-    pvc_name = kube.get_home_pvc_name(user)
-    storage_class = kube.get_home_storage_class()
-    try:
-        kube.create_persistent_volume_claim(pvc_name=pvc_name, namespace=kube.get_resource_namespace(username=username), storage_class=storage_class)
-    except Exception as e:
-        logger.warning(f'Failed to create home PVC for user={username}: ', str(e))
-        pass
-
 
 def create_userapp(stack, user, token_info):
     username = kube.get_username(user)
@@ -93,7 +81,7 @@ def create_userapp(stack, user, token_info):
 
     try:
         # Ensure that user's home PVC has been created
-        ensure_create_home_pvc(user=user)
+        kube.init_user(username=user)
 
         # Create service(s) / ingress / deployment
         kube.create_userapp(username=username, userapp=stack, spec_map=spec_map)
