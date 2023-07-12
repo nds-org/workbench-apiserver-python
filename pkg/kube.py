@@ -195,9 +195,9 @@ class KubeEventWatcher:
         self.thread = threading.Thread(target=self.run, name='kube-event-watcher', daemon=True)
 
         self.stream = None
-        logger.info('Starting KubeWatcher')
+        self.logger.info('Starting KubeWatcher')
         self.thread.start()
-        logger.info('Started KubeWatcher')
+        self.logger.info('Started KubeWatcher')
 
     def run(self):
         w = watch.Watch()
@@ -207,7 +207,7 @@ class KubeEventWatcher:
         # Ignore kube-system namespace
         # TODO: Parameterize this?
         ignored_namespaces = ['kube-system']
-        logger.info('KubeWatcher watching all namespaces except for: ' + str(ignored_namespaces))
+        self.logger.info('KubeWatcher watching all namespaces except for: ' + str(ignored_namespaces))
 
         # Include workbench app labels
         # Example:      'labels': {'manager': 'workbench',
@@ -218,14 +218,14 @@ class KubeEventWatcher:
         required_labels = {
             'manager': 'workbench'
         }
-        logger.info('KubeWatcher looking for required labels: ' + str(required_labels))
+        self.logger.info('KubeWatcher looking for required labels: ' + str(required_labels))
 
         resource_version = None
         k8s_event_stream = None
 
         while True:
             time.sleep(1)
-            logger.info('KubeWatcher is connecting...')
+            self.logger.info('KubeWatcher is connecting...')
             try:
                 # Resource version is used to keep track of stream progress (in case of resume)
                 k8s_event_stream = w.stream(func=v1.list_pod_for_all_namespaces,
@@ -238,7 +238,7 @@ class KubeEventWatcher:
 
                     # Skip Pods in ignored namespaces
                     if event['object'].metadata.namespace in ignored_namespaces:
-                        logger.debug('Skipping event in excluded namespace')
+                        self.logger.debug('Skipping event in excluded namespace')
                         continue
 
                     # Examine labels, ignore if not workbench app
@@ -265,7 +265,7 @@ class KubeEventWatcher:
                     # sid-stackkey-svckey-deploymentsuffix-podsuffix => we want 3rd to last
                     if config.KUBE_WORKBENCH_SINGLEPOD:
                         # TODO: Status events for singlepod mode
-                        logger.warning('Workbench cannot yet update stack status automatically when singlepod=True')
+                        self.logger.warning('Workbench cannot yet update stack status automatically when singlepod=True')
 
                         userapp_key = segments[2]
                         continue
@@ -288,7 +288,7 @@ class KubeEventWatcher:
                     write_status_and_endpoints(userapp_id, username, service_key, service_status, pod_ip,
                                                service_endpoints)
 
-                    logger.info(
+                    self.logger.info(
                         'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s  endpoints=%s' % (
                         userapp_id, service_key, type, phase, service_status, str(service_endpoints)))
             except (ApiException, HTTPError) as e:
