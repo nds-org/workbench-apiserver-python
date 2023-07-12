@@ -291,21 +291,22 @@ class KubeEventWatcher:
                     logger.info(
                         'UserappId=%s  ServiceKey=%s  type=%s  phase=%s  ->  status=%s  endpoints=%s' % (
                         userapp_id, service_key, type, phase, service_status, str(service_endpoints)))
-            except urllib3.exceptions.ProtocolError as e:
-                logger.error('KubeWatcher reconnecting to Kube API: %s' % str(e))
-                if k8s_event_stream:
-                    k8s_event_stream.close()
-                k8s_event_stream = None
-                time.sleep(2)
-                continue
             except (ApiException, HTTPError) as e:
+                self.logger.error('KubeWatcher reconnecting to Kube API: %s' % str(e))
                 if k8s_event_stream:
                     k8s_event_stream.close()
                 k8s_event_stream = None
-                logger.error("Connection to kube API failed: " + str(e))
                 if e.status == 410:
                     # Resource too old
                     resource_version = None
+                    self.logger.warning("Resource too old (410) - reconnecting: " + str(e))
+                time.sleep(2)
+                continue
+            except Exception as e:
+                self.logger.error('KubeWatcher reconnecting to Kube API: %s' % str(e))
+                if k8s_event_stream:
+                    k8s_event_stream.close()
+                k8s_event_stream = None
                 time.sleep(2)
                 continue
 
