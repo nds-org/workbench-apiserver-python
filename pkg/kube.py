@@ -501,7 +501,8 @@ def create_userapp(username, userapp, spec_map):
         stack_service_id = get_stack_service_id(userapp_id, service_key)
         resource_name = get_resource_name(get_username(username), userapp_id, service_key)
         service_ports = app_spec['ports'] if 'ports' in app_spec else []
-        ingress_hosts[resource_name] = service_ports
+        if app_spec['access'] == 'external':
+            ingress_hosts[resource_name] = service_ports
 
         # Build up config from userapp env/config and appspec config
         configmap_data = stack_service['config'] if 'config' in stack_service else {}
@@ -520,6 +521,10 @@ def create_userapp(username, userapp, spec_map):
             else:
                 configmap_data[cfg['name']] = cfg['value'] if 'value' in cfg else ''
 
+        configmap_data['NDSLABS_STACK'] = userapp_id
+        configmap_data['NDSLABS_USER'] = username
+        configmap_data['NDSLABS_NAMESPACE'] = namespace
+        configmap_data['NDSLABS_SERVICE'] = stack_service['id']
         stack_service['config'] = configmap_data
 
         # TODO: Support custom volume mounts?
