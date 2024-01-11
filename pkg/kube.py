@@ -106,7 +106,7 @@ def determine_new_endpoints(userapp_id, username, service_key, conditions):
                         'path': path,
                         # 'port': ':',       # unused
                         # 'nodePort': ':',   # unused
-                        'url': '%s://%s%s' % (protocol, host, path),
+                        'url': '%s://%s%s' % (config.FRONTEND_PROTOCOL, host, path),
                     }
 
                     logger.debug('Adding endpoint: %s' % endpoint)

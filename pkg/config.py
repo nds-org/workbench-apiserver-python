@@ -33,6 +33,8 @@ DOMAIN = os.getenv('DOMAIN', backend_config['domain'] if 'domain' in backend_con
 SSL_VERIFY = os.getenv('INSECURE_SSL_VERIFY',
                        backend_config['insecure_ssl_verify'] if 'insecure_ssl_verify' in backend_config else 'false'
                        ).lower() in ('true', '1', 't')
+FRONTEND_PROTOCOL = os.getenv('FRONTEND_PROTOCOL', frontend_config['domain'].split('://')[0] if 'domain' in frontend_config else 'https')
+
 
 # MongoStore
 MONGO_URI = os.getenv('MONGO_URI', backend_config['mongo']['uri'])
