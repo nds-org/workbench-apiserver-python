@@ -475,7 +475,7 @@ def get_init_container(username, spec_key, svc_key):
 
 
 # Creates the Kubernetes resources related to a userapp
-def create_userapp(username, userapp, spec_map):
+def create_userapp(username, email, userapp, spec_map):
     namespace = get_resource_namespace(username)
     containers = []
     ingress_hosts = {}
@@ -523,6 +523,7 @@ def create_userapp(username, userapp, spec_map):
 
         configmap_data['NDSLABS_STACK'] = userapp_id
         configmap_data['NDSLABS_USER'] = username
+        configmap_data['NDSLABS_EMAIL'] = email
         configmap_data['NDSLABS_NAMESPACE'] = namespace
         configmap_data['NDSLABS_SERVICE'] = stack_service['id']
         configmap_data['NDSLABS_DOMAIN'] = config.DOMAIN
