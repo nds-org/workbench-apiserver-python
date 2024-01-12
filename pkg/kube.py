@@ -525,6 +525,7 @@ def create_userapp(username, userapp, spec_map):
         configmap_data['NDSLABS_USER'] = username
         configmap_data['NDSLABS_NAMESPACE'] = namespace
         configmap_data['NDSLABS_SERVICE'] = stack_service['id']
+        configmap_data['NDSLABS_DOMAIN'] = config.DOMAIN
         stack_service['config'] = configmap_data
 
         # TODO: Support custom volume mounts?
