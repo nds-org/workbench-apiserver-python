@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: scaledown
+  namespace: cheesehub
+spec:
+  template:
+    spec:
+      serviceAccountName: cheesehub
+      containers:
+      - name: scaledown
+        image: ndslabs/scaledown
+        env:
+          - name: TARGET_LABEL_NAME
+            value: "manager"
+          - name: TARGET_LABEL_VALUE
+            value: "workbench"
+          - name: NAMESPACE
+            value: "cheesehub"
+          - name: DEBUG
+            value: "true"
+      restartPolicy: Never
+  backoffLimit: 4
