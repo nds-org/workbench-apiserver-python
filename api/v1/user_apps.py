@@ -59,7 +59,9 @@ def to_spec_map(specs, existing_map=None):
 
 
 def create_userapp(stack, user, token_info):
+    logger.info('token_info=%s' % token_info)
     username = kube.get_username(user)
+    user_email = token_info['email']
     stack['creator'] = username
     stack_id = generate_unique_id(user)
     stack['id'] = stack['_id'] = stack_id
@@ -84,7 +86,7 @@ def create_userapp(stack, user, token_info):
         kube.init_user(username=user)
 
         # Create service(s) / ingress / deployment
-        kube.create_userapp(username=username, userapp=stack, spec_map=spec_map)
+        kube.create_userapp(username=username, email=user_email, userapp=stack, spec_map=spec_map)
 
         # Save metadata to database
         stack = data_store.create_userapp(stack)
