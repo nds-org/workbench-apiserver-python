@@ -616,10 +616,11 @@ def create_userapp(username, email, userapp, spec_map):
             service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
 
             secrets = None
+            logger.info(f'Parsing secrets: {str(app_spec)}')
             if 'image' in app_spec and 'secrets' in app_spec['image']:
                 secrets = []
                 for secret_name in app_spec['image']['secrets']:
-                    print(f'Adding secret: {secret_name}')
+                    logger.info(f'Adding secret: {secret_name}')
                     secrets.append({'name': secret_name})
 
                 # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
@@ -661,10 +662,11 @@ def create_userapp(username, email, userapp, spec_map):
         app_spec = spec_map.get(userapp_key, None)
 
         secrets = None
+        logger.info(f'Parsing secrets: {str(app_spec)}')
         if 'image' in app_spec and 'secrets' in app_spec['image']:
             secrets = []
             for secret_name in app_spec['image']['secrets']:
-                print(f'Adding secret: {secret_name}')
+                logger.info(f'Adding secret: {secret_name}')
                 secrets.append({ 'name': secret_name })
 
         # No need to collocate, since all will run in single pod
@@ -969,7 +971,7 @@ def get_home_storage_class():
 
 # Containers:
 #   "busybox" -> { name, configmap, image, lifecycle, ports, command }
-def create_deployment(deployment_name, containers, labels, username, image_pull_secrets=None, **kwargs):
+def create_deployment(deployment_name, containers, labels, username, image_pull_secrets, **kwargs):
     appv1 = client.AppsV1Api()
 
     # TODO: Validation
