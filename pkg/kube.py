@@ -614,7 +614,14 @@ def create_userapp(username, email, userapp, spec_map):
 
             service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
 
-            # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
+            if 'image' in app_spec and 'secrets' in app_spec['image']:
+                secrets = []
+                for secret_name in app_spec['image']['secrets']:
+                    secrets.append({'name': secret_name})
+            else:
+                secrets = None
+
+                # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
             create_deployment(deployment_name=resource_name,
                               namespace=namespace,
                               replicas=0,
@@ -623,7 +630,7 @@ def create_userapp(username, email, userapp, spec_map):
                               init_containers=init_containers,
                               labels=svc_labels,
                               containers=[container],
-                              image_pull_secrets=app_spec['image']['secrets'] if 'image' in app_spec and 'secrets' in app_spec['image'] else None,
+                              image_pull_secrets=secrets,
                               collocate=userapp_id if 'collocate' in app_spec and app_spec['collocate'] else False)
 
     # Create one ingress per-stack
@@ -651,7 +658,14 @@ def create_userapp(username, email, userapp, spec_map):
     if should_run_as_single_pod:
         service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
         app_spec = spec_map.get(userapp_key, None)
-        
+
+        if 'image' in app_spec and 'secrets' in app_spec['image']:
+            secrets = []
+            for secret_name in app_spec['image']['secrets']:
+                secrets.append({ 'name': secret_name })
+        else:
+            secrets = None
+
         # No need to collocate, since all will run in single pod
         # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
         create_deployment(deployment_name=get_resource_name(get_username(username), userapp_id, userapp_key),
@@ -660,7 +674,7 @@ def create_userapp(username, email, userapp, spec_map):
                           service_account=service_account,
                           username=get_username(username),
                           labels=labels,
-                          image_pull_secrets=app_spec['image']['secrets'] if 'image' in app_spec and 'secrets' in app_spec['image'] else None,
+                          image_pull_secrets=secrets,
                           # TODO: how to wait for deps in singlepod mode?
                           # init_containers=init_containers,
                           containers=containers)
