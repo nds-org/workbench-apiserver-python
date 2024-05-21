@@ -523,6 +523,7 @@ def create_userapp(username, email, userapp, spec_map):
 
         configmap_data['NDSLABS_STACK'] = userapp_id
         configmap_data['NDSLABS_USER'] = username
+        configmap_data['NDSLABS_HOME'] = f'/home/{username}'
         configmap_data['NDSLABS_EMAIL'] = email
         configmap_data['NDSLABS_NAMESPACE'] = namespace
         configmap_data['NDSLABS_SERVICE'] = stack_service['id']
@@ -614,7 +615,15 @@ def create_userapp(username, email, userapp, spec_map):
 
             service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
 
-            # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
+            secrets = None
+            logger.info(f'Parsing secrets: {str(app_spec)}')
+            if 'image' in app_spec and 'secrets' in app_spec['image']:
+                secrets = []
+                for secret_name in app_spec['image']['secrets']:
+                    logger.info(f'Adding secret: {secret_name}')
+                    secrets.append({'name': secret_name})
+
+                # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
             create_deployment(deployment_name=resource_name,
                               namespace=namespace,
                               replicas=0,
@@ -623,6 +632,7 @@ def create_userapp(username, email, userapp, spec_map):
                               init_containers=init_containers,
                               labels=svc_labels,
                               containers=[container],
+                              image_pull_secrets=secrets,
                               collocate=userapp_id if 'collocate' in app_spec and app_spec['collocate'] else False)
 
     # Create one ingress per-stack
@@ -649,6 +659,15 @@ def create_userapp(username, email, userapp, spec_map):
 
     if should_run_as_single_pod:
         service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
+        app_spec = spec_map.get(userapp_key, None)
+
+        secrets = None
+        logger.info(f'Parsing secrets: {str(app_spec)}')
+        if 'image' in app_spec and 'secrets' in app_spec['image']:
+            secrets = []
+            for secret_name in app_spec['image']['secrets']:
+                logger.info(f'Adding secret: {secret_name}')
+                secrets.append({ 'name': secret_name })
 
         # No need to collocate, since all will run in single pod
         # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
@@ -658,6 +677,7 @@ def create_userapp(username, email, userapp, spec_map):
                           service_account=service_account,
                           username=get_username(username),
                           labels=labels,
+                          image_pull_secrets=secrets,
                           # TODO: how to wait for deps in singlepod mode?
                           # init_containers=init_containers,
                           containers=containers)
@@ -951,7 +971,7 @@ def get_home_storage_class():
 
 # Containers:
 #   "busybox" -> { name, configmap, image, lifecycle, ports, command }
-def create_deployment(deployment_name, containers, labels, username, **kwargs):
+def create_deployment(deployment_name, containers, labels, username, image_pull_secrets, **kwargs):
     appv1 = client.AppsV1Api()
 
     # TODO: Validation
@@ -1002,6 +1022,7 @@ def create_deployment(deployment_name, containers, labels, username, **kwargs):
 
     # Build a podspec from given containers and other parameters
     podspec = client.V1PodSpec(
+        image_pull_secrets=image_pull_secrets,
         service_account_name=service_account_name,
         volumes=shared_volumes,
         init_containers=init_containers,
@@ -1040,6 +1061,7 @@ def create_deployment(deployment_name, containers, labels, username, **kwargs):
                 # TODO: support container.lifecycle?
                 lifecycle=container['lifecycle'] if 'lifecycle' in container else None,
                 image=get_image_string(container['image']),
+                image_pull_policy='Always',
                 ports=[
                     client.V1ContainerPort(
                         name='%s%s' % (port['protocol'] if 'protocol' in port else 'tcp', str(port['port'])),
