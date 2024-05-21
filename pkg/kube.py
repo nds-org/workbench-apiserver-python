@@ -615,12 +615,12 @@ def create_userapp(username, email, userapp, spec_map):
 
             service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
 
+            secrets = None
             if 'image' in app_spec and 'secrets' in app_spec['image']:
                 secrets = []
                 for secret_name in app_spec['image']['secrets']:
+                    print(f'Adding secret: {secret_name}')
                     secrets.append({'name': secret_name})
-            else:
-                secrets = None
 
                 # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
             create_deployment(deployment_name=resource_name,
@@ -660,12 +660,12 @@ def create_userapp(username, email, userapp, spec_map):
         service_account = backend_config['userapps']['service_account_name'] if 'userapps' in backend_config and 'service_account_name' in backend_config['userapps'] else None
         app_spec = spec_map.get(userapp_key, None)
 
+        secrets = None
         if 'image' in app_spec and 'secrets' in app_spec['image']:
             secrets = []
             for secret_name in app_spec['image']['secrets']:
+                print(f'Adding secret: {secret_name}')
                 secrets.append({ 'name': secret_name })
-        else:
-            secrets = None
 
         # No need to collocate, since all will run in single pod
         # Create one deployment per-stack (start with 0 replicas, aka "Stopped")
