@@ -523,6 +523,7 @@ def create_userapp(username, email, userapp, spec_map):
 
         configmap_data['NDSLABS_STACK'] = userapp_id
         configmap_data['NDSLABS_USER'] = username
+        configmap_data['NDSLABS_HOME'] = f'/home/{username}'
         configmap_data['NDSLABS_EMAIL'] = email
         configmap_data['NDSLABS_NAMESPACE'] = namespace
         configmap_data['NDSLABS_SERVICE'] = stack_service['id']
