@@ -571,6 +571,7 @@ def create_userapp(username, email, userapp, spec_map):
             'args': stack_service['args'] if 'args' in stack_service else app_spec[
                 'args'] if 'args' in app_spec else None,
             'image': stack_service['image'] if 'image' in stack_service else app_spec['image'],
+            'imagePullPolicy': 'Always',
             'configmap': resource_name,
             'security_context': app_spec['securityContext'] if 'securityContext' in app_spec else None,
             'volume_mounts': volume_mounts,
