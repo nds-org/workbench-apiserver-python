@@ -1,0 +1,41 @@
+name: Smoke Test
+
+on: 
+  # Automatic: Run on pending pull requests
+  pull_request:
+    branches:
+      - main
+      - develop
+
+  # Automatic: Run when new commits are pushed to develop or main
+  push:
+    branches:
+      - main
+      - develop
+
+  # Manual: Allow user to manually request this via GitHub UI
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+      - uses: azure/setup-helm@v3
+      
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+        
+      - uses: helm/kind-action@v1
+        name: Create kind cluster
+        with:
+          config: .kind.with.hostpath.yml
+
+      #- name: Setup environment
+      #  run: |
+      #    cat env/backend.json | sed -e 's/WHICH_ARGS=-s/WHICH_ARGS=/' -e 's/REALM_IMPORT=true/REALM_IMPORT=false/' -e "s/KUBE_CONTEXT=docker-desktop/KUBE_CONTEXT=$(kubectl config current-context)/" > .env
+      #    cat env/backend.json
+
+      - name: Run Workbench API server
+        run: python ./server.py
