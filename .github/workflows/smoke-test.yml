@@ -10,6 +10,7 @@ on:
   # Automatic: Run when new commits are pushed to develop or main
   push:
     paths-ignore:
+      - '.gitignore'
       - 'Dockerfile'
       - '.dockerignore'
       - 'README.md'
