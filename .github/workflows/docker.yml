@@ -12,6 +12,12 @@ name: Docker
 on:
   # Trigger a build for every new push to the main branch
   push:
+    paths-ignore:
+      - '.github'
+      - '.gitignore'
+      - '.kind.with.hostpath.yml'
+      - 'README.md'
+      - 'test/**'
     branches:
       - master
       - main
