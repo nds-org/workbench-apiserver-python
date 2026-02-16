@@ -9,6 +9,10 @@ on:
 
   # Automatic: Run when new commits are pushed to develop or main
   push:
+    paths-ignore:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'README.md'
     branches:
       - main
       - develop
