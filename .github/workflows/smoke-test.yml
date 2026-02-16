@@ -22,16 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
-      - uses: azure/setup-helm@v3
       
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: pip install --user -r requirements.txt
         
       - uses: helm/kind-action@v1
         name: Create kind cluster
         with:
           config: .kind.with.hostpath.yml
-
+          
       #- name: Setup environment
       #  run: |
       #    cat env/backend.json | sed -e 's/WHICH_ARGS=-s/WHICH_ARGS=/' -e 's/REALM_IMPORT=true/REALM_IMPORT=false/' -e "s/KUBE_CONTEXT=docker-desktop/KUBE_CONTEXT=$(kubectl config current-context)/" > .env
