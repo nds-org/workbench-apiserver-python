@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.9' 
-      
+          
       - name: Install Python dependencies
         run: pip install --user -r requirements.txt
         
@@ -43,14 +43,19 @@ jobs:
         run: |
           cat env/backend.json | sed -e 's#"uri": "mongodb://workbench:workbench@workbench-mongodb-svc.workbench.svc.cluster.local:27017/ndslabs?authSource=admin",#"uri": "mongodb://workbench:workbench@localhost:27017/ndslabs?authSource=admin",#' > env/backend.json
           cat env/backend.json
-
-      - name: Run Workbench API server + MongoDB in the background, test connections
+          
+      - name: Run MongoDB in the background
         run: |
-          cat env/backend.json
+          kubectl create ns workbench
           kubectl run workbench-mongodb-svc -n workbench --image=mongo --restart=Never --expose --port=27017
           kubectl port-forward svc/workbench-mongodb-svc -n workbench 27017:27017 &
+          
+      - name: Run Workbench API server, test API connections
+        run: |
+          cat env/backend.json
           python ./server.py &
           curl --fail --insecure http://localhost:5000/api/v1/version
           curl --fail --insecure http://localhost:5000/backend.json
           curl --fail --insecure http://localhost:5000/frontend.json
           curl --fail --insecure http://localhost:5000/api/v1/services
+          
