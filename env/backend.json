@@ -1,5 +1,5 @@
 {
-  "debug": true,
+  "debug": "true",
   "insecure_ssl_verify": "false",
   "swagger_url": "openapi/swagger-v1.yml",
   "namespace": "workbench",
