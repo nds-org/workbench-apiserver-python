@@ -48,12 +48,14 @@ jobs:
         run: |
           kubectl create ns workbench
           kubectl run workbench-mongodb-svc -n workbench --image=mongo --restart=Never --expose --port=27017
+          kubectl wait pod --for=condition=Ready workbench-mongodb-svc -n workbench
           kubectl port-forward svc/workbench-mongodb-svc -n workbench 27017:27017 &
           
       - name: Run Workbench API server, test API connections
         run: |
           cat env/backend.json
           python ./server.py &
+          sleep 5s
           curl --fail --insecure http://localhost:5000/api/v1/version
           curl --fail --insecure http://localhost:5000/backend.json
           curl --fail --insecure http://localhost:5000/frontend.json
