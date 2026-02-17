@@ -45,7 +45,7 @@
           "*.kubernetes.docker.internal"
         ]
       },
-      "class": "nginx",
+      "class": "traefik",
       "enabled": true
     }
   },
