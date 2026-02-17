@@ -42,8 +42,7 @@ jobs:
       - name: Setup environment
         run: |
           ls -al env/
-          cat env/backend.json
-          cat env/backend.json | sed -e 's#workbench-mongodb-svc.workbench.svc.cluster.local#localhost#g' | sed -e 's#workbench-mongodb.workbench.svc.cluster.local#localhost#g' > env/backend.json
+          cat env/backend.json | jq '.mongo.uri = "mongodb://workbench:workbench@localhost:27017/ndslabs?authSource=admin"' > env/backend.json
           cat env/backend.json
           
       - name: Run MongoDB in the background
