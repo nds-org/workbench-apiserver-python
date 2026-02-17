@@ -51,13 +51,20 @@ jobs:
           kubectl wait pod --for=condition=Ready workbench-mongodb-svc -n workbench
           kubectl port-forward svc/workbench-mongodb-svc -n workbench 27017:27017 &
           
+      - name: Run MongoDB in the background
+        run: |
+          python ./server.py &
+          sleep 10s
+        
       - name: Run Workbench API server, test API connections
         run: |
-          cat env/backend.json
-          python ./server.py &
-          sleep 5s
+          sleep 2s
           curl --fail --insecure http://localhost:5000/api/v1/version
+          sleep 2s
           curl --fail --insecure http://localhost:5000/backend.json
+          sleep 2s
           curl --fail --insecure http://localhost:5000/frontend.json
+          sleep 2s
           curl --fail --insecure http://localhost:5000/api/v1/services
+          sleep 2s
           
