@@ -46,6 +46,7 @@ jobs:
 
       - name: Run Workbench API server + MongoDB in the background, test connections
         run: |
+          cat env/backend.json
           kubectl run workbench-mongodb-svc -n workbench --image=mongo --restart=Never --expose --port=27017
           kubectl port-forward svc/workbench-mongodb-svc -n workbench 27017:27017 &
           python ./server.py &
