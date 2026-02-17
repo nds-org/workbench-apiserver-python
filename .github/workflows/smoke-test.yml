@@ -44,19 +44,12 @@ jobs:
           cat env/backend.json | sed -e 's#"uri": "mongodb://workbench:workbench@workbench-mongodb-svc.workbench.svc.cluster.local:27017/ndslabs?authSource=admin",#"uri": "mongodb://workbench:workbench@localhost:27017/ndslabs?authSource=admin",#' > env/backend.json
           cat env/backend.json
 
-      - name: Run MongoDB
-        uses: addnab/docker-run-action@v3
-        with:
-          image: mongo
-          options: -e MONGO_INITDB_ROOT_USERNAME=workbench -e MONGO_INITDB_ROOT_PASSWORD=workbench -p 27017 -d
-
-      - name: Run Workbench API server
+      - name: Run Workbench API server + MongoDB in the background, test connections
         run: |
+          kubectl run workbench-mongodb-svc -n workbench --image=mongo --restart=Never --expose --port=27017
+          kubectl port-forward svc/workbench-mongodb-svc -n workbench 27017:27017 &
           python ./server.py &
           curl --fail --insecure http://localhost:5000/api/v1/version
           curl --fail --insecure http://localhost:5000/backend.json
           curl --fail --insecure http://localhost:5000/frontend.json
-        
-      - name: "Test Connection - API server -> MongoDB"
-        run: |
           curl --fail --insecure http://localhost:5000/api/v1/services
